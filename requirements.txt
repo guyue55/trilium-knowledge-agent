@@ -1,0 +1,30 @@
+# Core web framework
+fastapi==0.104.1
+uvicorn==0.23.2
+pydantic==2.12.5
+
+# Database and vector storage
+chromadb==0.4.22
+onnxruntime==1.17.0
+pulsar-client==3.8.0
+
+# AI and language processing
+langchain==0.0.350
+langchain-community==0.0.29
+langchain-core==0.1.53
+
+# Frontend and utilities
+streamlit==1.28.0
+requests==2.31.0
+watchdog==3.0.0
+python-dotenv==1.0.0
+
+# Language models
+gpt4all==2.0.0
+
+# HuggingFace components
+huggingface-hub==0.36.0
+sentence-transformers==2.7.0
+
+# Trilium integration
+trilium-py==1.3.0
