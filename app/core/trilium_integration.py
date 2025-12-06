@@ -22,6 +22,9 @@ class TriliumService:
         self.token = config.trilium_token or ""
         self.note_ids = config.note_ids or ['root']
         self.data_dir = config.trilium_data_dir or "."
+        # 设置遍历参数
+        self.depth = 5
+        self.limit = 500
         
         # 初始化Trilium客户端
         if self.base_url and self.token:
@@ -70,11 +73,16 @@ class TriliumService:
             try:
                 # 尝试获取一些真实内容
                 self._try_load_real_documents(documents)
+                print(f"尝试加载文档后，documents 数量: {len(documents)}")
                 if documents:
                     print(f"成功从Trilium加载 {len(documents)} 个真实文档")
                     return documents
+                else:
+                    print("没有成功加载任何真实文档")
             except Exception as e:
                 print(f"加载真实Trilium文档时出错: {e}")
+                import traceback
+                traceback.print_exc()
         
         # 只有在没有成功加载真实文档时才使用示例文档
         print("加载Trilium文档（使用示例内容）...")
@@ -106,7 +114,7 @@ class TriliumService:
         
         return documents
     
-    def _try_load_real_documents(self, documents: List[Dict[str, Any]]) -> None:
+    def _try_load_real_documents(self, documents: List[Dict[str, Any]], ) -> None:
         """尝试加载真实的Trilium文档.
         
         Args:
@@ -121,12 +129,16 @@ class TriliumService:
             print(f"准备从以下笔记ID加载文档: {note_ids_to_process}")
             
             for note_id in note_ids_to_process:
-                # 使用 traverse_note_tree 获取笔记树
-                tree_data = self.client.traverse_note_tree(noteId=note_id, depth=3, limit=50)
+                # 使用 traverse_note_tree 获取笔记树，增加limit以获取更多笔记
+                tree_data = self.client.traverse_note_tree(noteId=note_id, depth=self.depth, limit=self.limit)
                 if tree_data:
                     print(f"从笔记 {note_id} 遍历到 {len(tree_data)} 个笔记项")
                     # 处理遍历结果
-                    for item in tree_data:
+                    processed_count = 0
+                    skipped_count = 0
+                    error_count = 0
+                    
+                    for i, item in enumerate(tree_data):
                         if isinstance(item, dict) and 'noteId' in item:
                             # 检查是否已添加过该笔记
                             if any(doc.get('note_id') == item['noteId'] for doc in documents):
@@ -134,10 +146,25 @@ class TriliumService:
                                 
                             # 获取笔记详细信息
                             try:
+                                print(f"正在处理第 {i+1} 个笔记项，ID: {item['noteId']}")
                                 note_detail = self.client.get_note(item['noteId'])
-                                if note_detail and isinstance(note_detail, dict) and 'note' in note_detail:
-                                    note = note_detail['note']
+                                print(f"获取笔记详情结果类型: {type(note_detail)}")
+                                
+                                # 检查返回的数据格式
+                                if note_detail and isinstance(note_detail, dict):
+                                    # 新的API格式直接返回笔记信息，而不是包装在'note'键中
+                                    if 'noteId' in note_detail:
+                                        note = note_detail
+                                    elif 'note' in note_detail:
+                                        # 兼容旧格式
+                                        note = note_detail['note']
+                                    else:
+                                        print(f"笔记详情格式不符合预期: {note_detail}")
+                                        error_count += 1
+                                        continue
+                                    
                                     title = note.get('title', 'Untitled')
+                                    print(f"笔记标题: {title}")
                                     
                                     # 获取笔记内容
                                     content = ""
@@ -148,13 +175,15 @@ class TriliumService:
                                             print(f"通过 get_note_content 成功获取笔记 {item['noteId']} 内容，长度: {len(content)}")
                                     except Exception as e:
                                         print(f"获取笔记 {item['noteId']} 内容时出错: {e}")
-                                        continue
+                                        # 继续尝试其他方法
                                     
                                     # 如果通过 get_note_content 获取不到内容，则尝试从 note 对象获取
                                     if not content:
                                         content = note.get('content', '')
                                         if content:
                                             print(f"通过 note 对象获取笔记 {item['noteId']} 内容，长度: {len(content)}")
+                                    
+                                    print(f"最终获取到的内容长度: {len(content) if content else 0}")
                                     
                                     # 只有当内容不为空且不是字典时才添加到文档列表
                                     if content and not isinstance(content, dict) and isinstance(content, str) and content.strip():
@@ -165,20 +194,36 @@ class TriliumService:
                                             'attributes': []
                                         })
                                         print(f"成功添加笔记: {title} ({item['noteId']})")
+                                        processed_count += 1
                                         
-                                        # 限制文档数量
-                                        if len(documents) >= 30:
-                                            print("达到文档数量上限 (30)")
+                                        # 增加文档数量限制以处理更多文档
+                                        if len(documents) >= 500:
+                                            print("达到文档数量上限 (500)")
                                             return
                                     elif content and isinstance(content, str):
                                         print(f"跳过空内容笔记: {title} ({item['noteId']})")
+                                        skipped_count += 1
                                     else:
                                         print(f"完全无法获取内容: {title} ({item['noteId']})")
+                                        skipped_count += 1
+                                else:
+                                    print(f"笔记详情格式不符合预期: {note_detail}")
+                                    error_count += 1
                             except Exception as e:
                                 print(f"处理笔记 {item['noteId']} 时出错: {e}")
+                                error_count += 1
                                 continue
+                    
+                    print(f"处理统计 - 成功: {processed_count}, 跳过: {skipped_count}, 错误: {error_count}")
+                    # 如果我们至少处理了一个真实文档，则不需要使用示例文档
+                    if processed_count > 0:
+                        print(f"成功处理了 {processed_count} 个真实文档")
+                        return
+                        
         except Exception as e:
             print(f"尝试加载真实文档时出错: {e}")
+            import traceback
+            traceback.print_exc()
             raise
     
     def get_note_content(self, note_id: str) -> str:

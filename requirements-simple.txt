@@ -1,27 +1,31 @@
+# Logging
+loguru
+
 # Core web framework
 fastapi~=0.95.0
 uvicorn==0.21.1
 pydantic==1.10.7
 
 # Database and vector storage
-chromadb==0.4.22
+chromadb==0.4.24
 onnxruntime==1.17.0
 pulsar-client==3.8.0
 
-# AI and language processing (使用更稳定的版本组合)
-langchain==0.0.350
-langchain-community==0.0.20
-langchain-core==0.1.23
-langsmith==0.0.87
+# AI and language processing (使用最新稳定版)
+langchain==0.1.16              # 核心框架
+langchain-community==0.0.34    # 社区集成
+langchain-core~=0.1.42         # 核心组件
+langsmith~=0.1.20              # 监控和调试
+dashscope~=1.14.1              # 阿里云千问API
 
 # Frontend and utilities
-streamlit==1.28.0
-requests==2.31.0
+streamlit==1.33.0
+requests==2.32.3
 watchdog==3.0.0
 python-dotenv==1.0.0
 
 # Language models
-gpt4all==2.0.0
+gpt4all==2.2.1                 # 包含性能优化
 
 # HuggingFace components
 huggingface-hub==0.19.4

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """API endpoints for the Trilium Knowledge Agent."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Dict, Any
 
 from app.api.schemas import QuestionRequest, AnswerResponse
@@ -13,8 +13,13 @@ from app.core.qa_service import QAService
 router = APIRouter()
 
 
-def get_qa_service():
+def get_qa_service(request: Request):
     """获取问答服务实例."""
+    # 从应用状态中获取全局服务实例
+    if hasattr(request.app.state, 'qa_service') and request.app.state.qa_service:
+        return request.app.state.qa_service
+    
+    # 如果没有全局服务实例，创建新的（后备方案）
     config = get_config()
     llm_service = LLMService(config)
     knowledge_base = KnowledgeBase(config)
@@ -23,17 +28,17 @@ def get_qa_service():
 
 
 @router.post("/ask", response_model=AnswerResponse)
-async def ask_question(request: QuestionRequest) -> AnswerResponse:
+async def ask_question(request: QuestionRequest, qa_service: QAService = Depends(get_qa_service)) -> AnswerResponse:
     """Ask a question based on the knowledge base.
     
     Args:
         request: The question request.
+        qa_service: The QA service instance.
         
     Returns:
         The answer response with sources.
     """
     # 实现实际的问答逻辑
-    qa_service = get_qa_service()
     result = qa_service.ask_question(request.question)
     
     # 确保返回的数据符合AnswerResponse模型
@@ -44,14 +49,14 @@ async def ask_question(request: QuestionRequest) -> AnswerResponse:
 
 
 @router.get("/status")
-async def get_status() -> Dict[str, Any]:
+async def get_status(request: Request) -> Dict[str, Any]:
     """Get the status of the knowledge agent.
     
     Returns:
         Status information.
     """
     config = get_config()
-    qa_service = get_qa_service()
+    qa_service = get_qa_service(request)
     
     status_info = {
         "status": "running",

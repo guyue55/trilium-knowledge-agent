@@ -5,12 +5,13 @@ import sys
 import os
 
 # 将项目根目录添加到路径中
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import get_config
 from app.core.qa_service import QAService
 from app.core.llm_service import LLMService
 from app.core.knowledge_base import KnowledgeBase
+
 
 def debug_qa():
     """检查问答服务返回的sources."""

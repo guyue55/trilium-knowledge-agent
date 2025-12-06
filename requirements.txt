@@ -1,26 +1,31 @@
+# Logging
+loguru
+
 # Core web framework
 fastapi==0.104.1
 uvicorn==0.23.2
 pydantic==2.12.5
 
 # Database and vector storage
-chromadb==0.4.22
+chromadb==0.4.24
 onnxruntime==1.17.0
 pulsar-client==3.8.0
 
 # AI and language processing
-langchain==0.0.350
-langchain-community==0.0.29
-langchain-core==0.1.53
+langchain==0.1.16
+langchain-community==0.0.34
+langchain-core==0.1.33
+dashscope==1.14.5
 
 # Frontend and utilities
-streamlit==1.28.0
-requests==2.31.0
+streamlit==1.33.0
+requests==2.32.3
 watchdog==3.0.0
 python-dotenv==1.0.0
+tqdm==4.66.4
 
 # Language models
-gpt4all==2.0.0
+gpt4all==2.2.1
 
 # HuggingFace components
 huggingface-hub==0.36.0

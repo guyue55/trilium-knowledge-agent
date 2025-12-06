@@ -86,15 +86,12 @@ def main():
                 # 如果有来源则显示
                 if "sources" in message and message["sources"]:
                     with st.expander("查看来源"):
-                        st.markdown(f"_调试: 消息中的sources类型 {type(message['sources'])}_")
-                        for i, source in enumerate(message["sources"]):
-                            st.markdown(f"_调试: 来源{i+1}类型 {type(source)}_")
+                        for source in message["sources"]:
                             # 显示更友好的来源信息
                             if isinstance(source, dict):
                                 title = source.get("title", "未知标题")
                                 url = source.get("url")
                                 content = source.get("content", "")
-                                st.markdown(f"_调试: 标题='{title}', URL='{url}'_")
                                 if url:
                                     st.markdown(f"**[{title}]({url})**")
                                 else:
@@ -120,28 +117,19 @@ def main():
                 response = send_question(prompt)
                 
             if response:
-                # 调试：显示完整响应
-                st.markdown(f"_调试: 后端响应 {json.dumps(response, ensure_ascii=False)}_")
-                
                 answer = response.get("answer", "抱歉，我没有找到答案。")
                 st.markdown(answer)
                 
                 # 添加来源（如果有）
                 sources = response.get("sources", [])
                 if sources:
-                    # 确保sources数据完整，创建深拷贝以防止后续操作影响
-                    sources_copy = copy.deepcopy(sources)
-                    
                     with st.expander("查看来源"):
-                        st.markdown(f"_调试: 原始sources类型 {type(sources)}_")
-                        for i, source in enumerate(sources_copy):
-                            st.markdown(f"_调试: 来源{i+1}类型 {type(source)}_")
+                        for source in sources:
                             # 显示更友好的来源信息
                             if isinstance(source, dict):
                                 title = source.get("title", "未知标题")
                                 url = source.get("url")
                                 content = source.get("content", "")
-                                st.markdown(f"_调试: 标题='{title}', URL='{url}'_")
                                 if url:
                                     st.markdown(f"**[{title}]({url})**")
                                 else:
@@ -152,11 +140,11 @@ def main():
                             else:
                                 st.markdown(f"- {source}")
                 
-                # 将助手响应添加到对话中，使用拷贝的数据
+                # 将助手响应添加到对话中
                 st.session_state.conversation.append({
                     "role": "assistant", 
                     "content": answer,
-                    "sources": sources if not sources else copy.deepcopy(sources)
+                    "sources": sources
                 })
             else:
                 st.error("无法获取回答，请检查后端服务是否正常运行。")
