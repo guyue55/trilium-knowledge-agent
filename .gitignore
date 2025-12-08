@@ -218,3 +218,4 @@ __marimo__/
 data/model/*
 data/trilium/*
 data/vector_db/*
+data/models/

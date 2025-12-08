@@ -11,6 +11,17 @@ from langchain.memory import ConversationBufferMemory
 LANGCHAIN_MEMORY_IMPORTED = True
 
 LANGCHAIN_IMPORTED = LANGCHAIN_CHAINS_IMPORTED and LANGCHAIN_MEMORY_IMPORTED
+import jieba
+
+# 添加专业术语到jieba词典
+jieba.add_word("docker")
+jieba.add_word("容器")
+jieba.add_word("镜像")
+jieba.add_word("volume")
+jieba.add_word("network")
+jieba.add_word("ddns")
+jieba.add_word("部署")
+jieba.add_word("命令")
 
 
 class QAService:
@@ -55,14 +66,16 @@ class QAService:
         if (LANGCHAIN_CHAINS_IMPORTED and RetrievalQA and self.llm and 
             self.knowledge_base.vector_store):
             try:
-                # 定义自定义提示词模板
-                prompt_template = """使用以下上下文来回答最后的问题。如果你不知道答案，就说你不知道，不要试图编造答案。
+                # 定义自定义提示词模板，针对检索场景优化
+                prompt_template = """基于以下已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 "根据已知信息无法回答该问题"，不允许在答案中添加编造成分，答案请使用中文。
 
+已知内容:
 {context}
 
-问题: {question}
+问题:
+{question}
 
-有帮助的回答:"""
+答案:"""
                 prompt = PromptTemplate(
                     template=prompt_template, 
                     input_variables=["context", "question"]
@@ -72,9 +85,9 @@ class QAService:
                 self.qa_chain = RetrievalQA.from_chain_type(
                     llm=self.llm,
                     chain_type="stuff",
-                    retriever=self.knowledge_base.vector_store.as_retriever(),
+                    retriever=self.knowledge_base.vector_store.as_retriever(search_kwargs={"k": 5}),
                     # 暂时禁用内存以排除问题
-                    # memory=self.memory,
+                    memory=self.memory,
                     return_source_documents=True,
                     output_key="result",
                     chain_type_kwargs={"prompt": prompt}
@@ -138,7 +151,61 @@ class QAService:
         
         # 尝试在知识库中搜索相关信息
         try:
-            docs = self.knowledge_base.vector_store.similarity_search(question, k=2)  # 从3减少到2
+            # 获取扩展查询
+            expanded_questions = self._expand_query(question)
+            print(f"扩展查询: {expanded_questions}")
+            
+            all_docs = []
+            
+            # 对每个扩展查询进行搜索
+            for query in expanded_questions:
+                if query != question:
+                    print(f"使用扩展查询: {query}")
+                
+                # 1. 基础相似度搜索
+                docs_similarity = self.knowledge_base.vector_store.similarity_search(query, k=4)
+                all_docs.extend(docs_similarity)
+                if query == question:
+                    print(f"相似度搜索返回 {len(docs_similarity)} 个结果")
+                
+                # 2. 使用MMR搜索获取更多样化的结果
+                docs_mmr = self.knowledge_base.vector_store.max_marginal_relevance_search(
+                    query, 
+                    k=4, 
+                    fetch_k=20,
+                    lambda_mult=0.3  # 更偏向相关性
+                )
+                all_docs.extend(docs_mmr)
+                if query == question:
+                    print(f"MMR搜索返回 {len(docs_mmr)} 个结果")
+            
+            # 3. 去重并按相关性排序
+            docs = []
+            seen_note_ids = set()
+            doc_scores = {}  # 存储文档得分
+            
+            # 计算每个文档的得分（出现次数）
+            for doc in all_docs:
+                note_id = doc.metadata.get('note_id', '')
+                if note_id in doc_scores:
+                    doc_scores[note_id] += 1
+                else:
+                    doc_scores[note_id] = 1
+            
+            # 按得分排序文档
+            sorted_docs = []
+            for doc in all_docs:
+                note_id = doc.metadata.get('note_id', '')
+                if note_id not in seen_note_ids:
+                    sorted_docs.append((doc, doc_scores[note_id]))
+                    seen_note_ids.add(note_id)
+            
+            # 按得分降序排序
+            sorted_docs.sort(key=lambda x: x[1], reverse=True)
+            
+            # 提取排序后的文档
+            docs = [doc for doc, score in sorted_docs][:10]
+            print(f"总共合并去重并排序后得到 {len(docs)} 个文档")
         except Exception as e:
             error_details = ""
             if hasattr(self, 'init_errors') and self.init_errors:
@@ -308,3 +375,80 @@ class QAService:
                 "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
             })
         return sources
+    
+    def _expand_query(self, question: str) -> list:
+        """扩展查询以提高检索效果.
+        
+        Args:
+            question: 原始查询
+            
+        Returns:
+            扩展后的查询列表
+        """
+        expanded_queries = [question]
+        
+        # 使用jieba进行中文分词
+        words = list(jieba.cut(question))
+        print(f"查询分词结果: {words}")
+        
+        # 通用的操作词映射
+        operation_mappings = {
+            "停止": ["停止", "关闭", "终止", "停用"],
+            "启动": ["启动", "运行", "开启", "激活"],
+            "删除": ["删除", "移除", "清理", "销毁"],
+            "查看": ["查看", "浏览", "列出", "显示", "查询"],
+            "部署": ["部署", "安装", "配置", "搭建", "设置"],
+            "命令": ["命令", "指令", "方法", "方式", "操作"],
+        }
+        
+        # 通用的技术词映射
+        tech_mappings = {
+            "容器": ["容器", "docker容器", "实例", "服务", "pod"],
+            "镜像": ["镜像", "image", "images"],
+            "网络": ["网络", "network", "networks"],
+            "数据卷": ["数据卷", "volume", "volumes", "存储"],
+            "服务": ["服务", "service", "services"],
+        }
+        
+        # 基于分词结果生成变体查询
+        variant_queries = set()
+        
+        # 处理操作词
+        for word in words:
+            if word in operation_mappings:
+                for variant in operation_mappings[word]:
+                    new_query = question.replace(word, variant)
+                    if new_query != question:
+                        variant_queries.add(new_query)
+        
+        # 处理技术词
+        for word in words:
+            if word in tech_mappings:
+                for variant in tech_mappings[word]:
+                    new_query = question.replace(word, variant)
+                    if new_query != question:
+                        variant_queries.add(new_query)
+        
+        expanded_queries.extend(list(variant_queries))
+        
+        # 添加通用前缀和后缀
+        prefixes = ["docker", "如何", "怎样", "怎么"]
+        suffixes = ["命令", "方法", "方式", "操作", "步骤", "指南"]
+        
+        for prefix in prefixes:
+            if not question.startswith(prefix):
+                expanded_queries.append(f"{prefix}{question}")
+        
+        for suffix in suffixes:
+            if not question.endswith(suffix):
+                expanded_queries.append(f"{question}{suffix}")
+        
+        # 去重并保持原始查询在第一位
+        unique_queries = []
+        seen = set()
+        for query in expanded_queries:
+            if query not in seen:
+                unique_queries.append(query)
+                seen.add(query)
+        
+        return unique_queries

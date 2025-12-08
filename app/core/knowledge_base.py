@@ -10,19 +10,6 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 IMPORT_SUCCESS = True
-# # 尝试导入langchain组件
-# try:
-#     # 使用社区版本导入路径
-#     from langchain_community.embeddings import HuggingFaceEmbeddings
-#     from langchain_community.vectorstores import Chroma
-#     from langchain.text_splitter import RecursiveCharacterTextSplitter
-#     IMPORT_SUCCESS = True
-# except ImportError as e:
-#     print(f"无法导入langchain组件: {e}")
-#     IMPORT_SUCCESS = False
-#     HuggingFaceEmbeddings = None
-#     Chroma = None
-#     RecursiveCharacterTextSplitter = None
 
 
 class KnowledgeBase:
@@ -39,86 +26,80 @@ class KnowledgeBase:
         self.vector_store = None
         self.text_splitter = None
         
-        if IMPORT_SUCCESS and HuggingFaceEmbeddings and Chroma:
-            try:
-                # 设置镜像源
-                if self.config.hf_endpoint:
-                    os.environ['HF_ENDPOINT'] = self.config.hf_endpoint
-                
-                # 检查本地模型是否存在，如果不存在则使用在线模型
-                model_name = self.config.embedding_model
-                local_model_path = self.config.embedding_model_local_path
-                if os.path.exists(local_model_path):
-                    model_name = local_model_path
-                    print(f"使用本地嵌入模型: {model_name}")
-                else:
-                    print(f"警告: 本地模型不存在 ({local_model_path})")
-                    print(f"将从在线源加载模型: {model_name}")
-                    # 检查是否有网络连接，如果没有给出明确提示
-                    try:
-                        import requests
-                        requests.get("https://huggingface.co", timeout=5)
-                    except:
-                        print("警告: 无法连接到Hugging Face，可能需要配置代理或使用镜像源")
-                
-                # 使用本地缓存的模型，避免网络连接问题
+        try:
+            # 设置镜像源
+            if self.config.hf_endpoint:
+                os.environ['HF_ENDPOINT'] = self.config.hf_endpoint
+            
+            # 检查本地模型是否存在，如果不存在则使用在线模型
+            model_name = self.config.embedding_model
+            local_model_path = self.config.embedding_model_local_path
+            if os.path.exists(local_model_path):
+                model_name = local_model_path
+                print(f"使用本地嵌入模型: {model_name}")
+            else:
+                print(f"警告: 本地模型不存在 ({local_model_path})")
+                print(f"将从在线源加载模型: {model_name}")
+                # 检查是否有网络连接，如果没有给出明确提示
                 try:
-                    self.embedding_model = HuggingFaceEmbeddings(
-                        model_name=model_name,
-                        cache_folder="./data/models"
-                    )
-                    print("嵌入模型初始化成功")
-                except RuntimeError as re:
-                    if "split_torch_state_dict_into_shards" in str(re):
-                        print("检测到huggingface_hub版本兼容性问题，尝试使用降级方案...")
-                        # 版本兼容性问题的特殊处理
-                        try:
-                            # 使用更简单的初始化方式
-                            self.embedding_model = HuggingFaceEmbeddings(
-                                model_name=model_name,
-                                cache_folder="./data/models",
-                                model_kwargs={"local_files_only": True}  # 只使用本地文件
-                            )
-                            print("使用本地文件模式初始化嵌入模型成功")
-                        except Exception as e2:
-                            print(f"本地文件模式初始化也失败: {e2}")
-                            self.embedding_model = None
-                    else:
-                        print(f"嵌入模型初始化出现运行时错误: {re}")
-                        self.embedding_model = None
-                except Exception as e:
-                    print(f"嵌入模型初始化出现其他错误: {e}")
-                    self.embedding_model = None
-                
-                if self.embedding_model:
+                    import requests
+                    requests.get("https://huggingface.co", timeout=5)
+                except:
+                    print("警告: 无法连接到Hugging Face，可能需要配置代理或使用镜像源")
+            
+            # 使用本地缓存的模型，避免网络连接问题
+            try:
+                self.embedding_model = HuggingFaceEmbeddings(
+                    model_name=model_name,
+                    cache_folder="./data/models"
+                )
+                print("嵌入模型初始化成功")
+            except RuntimeError as re:
+                if "split_torch_state_dict_into_shards" in str(re):
+                    print("检测到huggingface_hub版本兼容性问题，尝试使用降级方案...")
+                    # 版本兼容性问题的特殊处理
                     try:
-                        self.vector_store = Chroma(
-                            embedding_function=self.embedding_model,
-                            persist_directory=config.vector_db_dir
+                        # 使用更简单的初始化方式
+                        self.embedding_model = HuggingFaceEmbeddings(
+                            model_name=model_name,
+                            cache_folder="./data/models",
+                            model_kwargs={"local_files_only": True}  # 只使用本地文件
                         )
-                        print("向量存储初始化成功")
-                    except Exception as e:
-                        print(f"向量存储初始化失败: {e}")
-                        self.vector_store = None
+                        print("使用本地文件模式初始化嵌入模型成功")
+                    except Exception as e2:
+                        print(f"本地文件模式初始化也失败: {e2}")
+                        self.embedding_model = None
                 else:
-                    print("嵌入模型未正确初始化，向量存储也无法初始化")
-                    self.vector_store = None
-                
-                # 只有在需要时才初始化文本分割器
-                # self.text_splitter = RecursiveCharacterTextSplitter(
-                #     chunk_size=1000,
-                #     chunk_overlap=200
-                # )
-                # print("文本分割器初始化成功")
+                    print(f"嵌入模型初始化出现运行时错误: {re}")
+                    self.embedding_model = None
             except Exception as e:
-                print(f"初始化知识库组件时出错: {e}")
-                import traceback
-                traceback.print_exc()
+                print(f"嵌入模型初始化出现其他错误: {e}")
                 self.embedding_model = None
+            
+            if self.embedding_model:
+                try:
+                    self.vector_store = Chroma(
+                        embedding_function=self.embedding_model,
+                        persist_directory=config.vector_db_dir
+                    )
+                    print("向量存储初始化成功")
+                except Exception as e:
+                    print(f"向量存储初始化失败: {e}")
+                    self.vector_store = None
+            else:
+                print("嵌入模型未正确初始化，向量存储也无法初始化")
                 self.vector_store = None
-                self.text_splitter = None
-        else:
-            print("缺少必要的Langchain组件")
+            
+            # 只有在需要时才初始化文本分割器
+            # self.text_splitter = RecursiveCharacterTextSplitter(
+            #     chunk_size=1000,
+            #     chunk_overlap=200
+            # )
+            # print("文本分割器初始化成功")
+        except Exception as e:
+            print(f"初始化知识库组件时出错: {e}")
+            import traceback
+            traceback.print_exc()
             self.embedding_model = None
             self.vector_store = None
             self.text_splitter = None
@@ -192,15 +173,31 @@ class KnowledgeBase:
                         # 如果有路径信息也添加到元数据中
                         if 'path' in doc.metadata:
                             split.metadata['path'] = doc.metadata['path']
-                        print(f"为文档片段添加元数据: title={split.metadata['title']}, note_id={split.metadata['note_id']}, path={split.metadata.get('path', '无')}")
+                        # print(f"为文档片段添加元数据: title={split.metadata['title']}, "
+                        #       f"note_id={split.metadata['note_id']}, path={split.metadata.get('path', '无')}")
                     
                     docs_to_add.extend(splits)
 
             # 更新向量数据库
             if docs_to_add:  # 确保有文档要添加
-                self.vector_store.add_documents(docs_to_add)
-                self.vector_store.persist()
-                print(f"成功添加 {len(docs_to_add)} 个文档到向量存储")
+                total_docs = len(docs_to_add)
+                # ChromaDB has a batch size limit (around 41666), so we process in smaller batches
+                batch_size = 5000
+                print(f"准备添加 {total_docs} 个文档片段到向量存储，分批处理 (每批 {batch_size})...")
+                
+                for i in range(0, total_docs, batch_size):
+                    batch = docs_to_add[i:i + batch_size]
+                    current_batch_num = i // batch_size + 1
+                    total_batches = (total_docs + batch_size - 1) // batch_size
+                    print(f"正在处理批次 {current_batch_num}/{total_batches} (文档片段 {i+1} - {min(i+batch_size, total_docs)})...")
+                    
+                    self.vector_store.add_documents(batch)
+                    
+                    # Persist after each batch to save progress
+                    if hasattr(self.vector_store, 'persist'):
+                        self.vector_store.persist()
+                        
+                print(f"成功添加所有 {total_docs} 个文档片段到向量存储")
             else:
                 print("没有文档需要添加到向量存储")
         except Exception as e:

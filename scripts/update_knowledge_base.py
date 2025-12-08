@@ -22,11 +22,11 @@ def update_knowledge_base():
     
     # 临时增加限制以获取更多文档（全量更新）
     # 默认可能只有500，增加到10000以确保覆盖大部分知识库
-    config.depth = 10
-    config.limit = 10000
+    config.depth = int(os.getenv("TRILIUM_SAFE_DEPTH", 20))
+    config.limit = int(os.getenv("TRILIUM_SAFE_LIMIT", 10000))
     # config.depth = 3
     # config.limit = 100
-    print(f"已设置文档获取限制为: {config.limit}")
+    print(f"已设置文档获取限制为: {config.limit}, 深度: {config.depth}")
     
     # 初始化服务
     trilium_service = TriliumService(config)
