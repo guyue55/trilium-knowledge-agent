@@ -62,17 +62,47 @@ class KnowledgeBase:
                         print("警告: 无法连接到Hugging Face，可能需要配置代理或使用镜像源")
                 
                 # 使用本地缓存的模型，避免网络连接问题
-                self.embedding_model = HuggingFaceEmbeddings(
-                    model_name=model_name,
-                    cache_folder="./data/models"
-                )
-                print("嵌入模型初始化成功")
+                try:
+                    self.embedding_model = HuggingFaceEmbeddings(
+                        model_name=model_name,
+                        cache_folder="./data/models"
+                    )
+                    print("嵌入模型初始化成功")
+                except RuntimeError as re:
+                    if "split_torch_state_dict_into_shards" in str(re):
+                        print("检测到huggingface_hub版本兼容性问题，尝试使用降级方案...")
+                        # 版本兼容性问题的特殊处理
+                        try:
+                            # 使用更简单的初始化方式
+                            self.embedding_model = HuggingFaceEmbeddings(
+                                model_name=model_name,
+                                cache_folder="./data/models",
+                                model_kwargs={"local_files_only": True}  # 只使用本地文件
+                            )
+                            print("使用本地文件模式初始化嵌入模型成功")
+                        except Exception as e2:
+                            print(f"本地文件模式初始化也失败: {e2}")
+                            self.embedding_model = None
+                    else:
+                        print(f"嵌入模型初始化出现运行时错误: {re}")
+                        self.embedding_model = None
+                except Exception as e:
+                    print(f"嵌入模型初始化出现其他错误: {e}")
+                    self.embedding_model = None
                 
-                self.vector_store = Chroma(
-                    embedding_function=self.embedding_model,
-                    persist_directory=config.vector_db_dir
-                )
-                print("向量存储初始化成功")
+                if self.embedding_model:
+                    try:
+                        self.vector_store = Chroma(
+                            embedding_function=self.embedding_model,
+                            persist_directory=config.vector_db_dir
+                        )
+                        print("向量存储初始化成功")
+                    except Exception as e:
+                        print(f"向量存储初始化失败: {e}")
+                        self.vector_store = None
+                else:
+                    print("嵌入模型未正确初始化，向量存储也无法初始化")
+                    self.vector_store = None
                 
                 # 只有在需要时才初始化文本分割器
                 # self.text_splitter = RecursiveCharacterTextSplitter(
@@ -137,19 +167,40 @@ class KnowledgeBase:
             return
             
         try:
+            # 准备文档列表
+            docs_to_add = []
+            
             # 如果没有文本分割器，直接使用原始文档
-            if self.text_splitter:
-                # 分割文档
-                texts = self.text_splitter.split_documents(documents)
+            if not self.text_splitter:
+                docs_to_add = documents
             else:
-                # 直接使用原始文档
-                texts = documents
+                # 分割每个文档
+                for doc in documents:
+                    # 分割文档
+                    splits = self.text_splitter.split_documents([doc])
+                    # 为每个分割后的文档添加元数据
+                    for split in splits:
+                        # 确保元数据包含所有必要信息
+                        if not split.metadata:
+                            split.metadata = {}
+                        
+                        # 从原始文档复制元数据
+                        split.metadata['title'] = doc.metadata.get('title', '未知标题')
+                        split.metadata['source'] = doc.metadata.get('source', '未知')
+                        split.metadata['note_id'] = doc.metadata.get('note_id', '')
+                        
+                        # 如果有路径信息也添加到元数据中
+                        if 'path' in doc.metadata:
+                            split.metadata['path'] = doc.metadata['path']
+                        print(f"为文档片段添加元数据: title={split.metadata['title']}, note_id={split.metadata['note_id']}, path={split.metadata.get('path', '无')}")
+                    
+                    docs_to_add.extend(splits)
 
             # 更新向量数据库
-            if texts:  # 确保有文档要添加
-                self.vector_store.add_documents(texts)
+            if docs_to_add:  # 确保有文档要添加
+                self.vector_store.add_documents(docs_to_add)
                 self.vector_store.persist()
-                print(f"成功添加 {len(texts)} 个文档到向量存储")
+                print(f"成功添加 {len(docs_to_add)} 个文档到向量存储")
             else:
                 print("没有文档需要添加到向量存储")
         except Exception as e:

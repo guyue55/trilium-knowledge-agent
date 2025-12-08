@@ -281,11 +281,21 @@ class QAService:
             elif 'note_id' in doc.metadata:
                 note_id = doc.metadata.get('note_id')
             
+            # 获取路径信息
+            note_path = doc.metadata.get('path', '')
+            
+            # 构建Trilium笔记的URL
             # 构建Trilium笔记的URL
             trilium_url = None
             if note_id and hasattr(self.config, 'trilium_base_url') and self.config.trilium_base_url:
-                # 构造Trilium笔记的URL
-                trilium_url = f"{self.config.trilium_base_url.rstrip('/')}/#root?noteId={note_id}"
+                # 使用完整的路径信息构建URL
+                if note_path:
+                    # 如果有路径信息，则构建完整路径URL
+                    # 如果有路径信息，则构建完整路径URL
+                    trilium_url = f"{self.config.trilium_base_url.rstrip('/')}/#root/{note_path}?ntxId={note_id}"
+                else:
+                    # 如果没有路径信息，则使用自动跳转URL
+                    trilium_url = f"{self.config.trilium_base_url.rstrip('/')}/#?noteId={note_id}"
             
             # 确保标题不为空
             if not title or title.strip() == "":

@@ -36,6 +36,25 @@ def send_question(question: str) -> Optional[dict]:
             st.error(f"详细错误信息: {e.response.text}")
         return None
 
+def display_sources(sources: list) -> None:
+    """显示来源信息."""
+    if not sources:
+        return
+    
+    with st.expander("查看来源"):
+        for source in sources:
+            # 显示更友好的来源信息
+            if isinstance(source, dict):
+                title = source.get("title", "未知标题")
+                url = source.get("url")
+                # 不再显示内容详情，只显示标题和链接
+                if url:
+                    st.markdown(f"**[{title}]({url})**")
+                else:
+                    st.markdown(f"**{title}**")
+            else:
+                st.markdown(f"- {source}")
+
 def main():
     """主Streamlit应用程序."""
     st.set_page_config(
@@ -85,22 +104,7 @@ def main():
                 st.markdown(message["content"])
                 # 如果有来源则显示
                 if "sources" in message and message["sources"]:
-                    with st.expander("查看来源"):
-                        for source in message["sources"]:
-                            # 显示更友好的来源信息
-                            if isinstance(source, dict):
-                                title = source.get("title", "未知标题")
-                                url = source.get("url")
-                                content = source.get("content", "")
-                                if url:
-                                    st.markdown(f"**[{title}]({url})**")
-                                else:
-                                    st.markdown(f"**{title}**")
-                                
-                                if content:
-                                    st.markdown(f"> {content}")
-                            else:
-                                st.markdown(f"- {source}")
+                    display_sources(message["sources"])
     
     # 问题输入
     if prompt := st.chat_input("请输入您的问题..."):
@@ -123,22 +127,7 @@ def main():
                 # 添加来源（如果有）
                 sources = response.get("sources", [])
                 if sources:
-                    with st.expander("查看来源"):
-                        for source in sources:
-                            # 显示更友好的来源信息
-                            if isinstance(source, dict):
-                                title = source.get("title", "未知标题")
-                                url = source.get("url")
-                                content = source.get("content", "")
-                                if url:
-                                    st.markdown(f"**[{title}]({url})**")
-                                else:
-                                    st.markdown(f"**{title}**")
-                                
-                                if content:
-                                    st.markdown(f"> {content}")
-                            else:
-                                st.markdown(f"- {source}")
+                    display_sources(sources)
                 
                 # 将助手响应添加到对话中
                 st.session_state.conversation.append({
