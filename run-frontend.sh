@@ -1,1 +1,1 @@
-streamlit run frontend/app.py
+streamlit run frontend/app.py --server.port 9001

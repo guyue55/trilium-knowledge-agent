@@ -85,7 +85,7 @@ class QAService:
                 self.qa_chain = RetrievalQA.from_chain_type(
                     llm=self.llm,
                     chain_type="stuff",
-                    retriever=self.knowledge_base.vector_store.as_retriever(search_kwargs={"k": 5}),
+                    retriever=self.knowledge_base.vector_store.as_retriever(search_kwargs={"k": self.config.search_k}),
                     # 暂时禁用内存以排除问题
                     # memory=self.memory,
                     return_source_documents=True,
@@ -204,7 +204,7 @@ class QAService:
             sorted_docs.sort(key=lambda x: x[1], reverse=True)
             
             # 提取排序后的文档
-            docs = [doc for doc, score in sorted_docs][:10]
+            docs = [doc for doc, score in sorted_docs][:self.config.search_k]
             print(f"总共合并去重并排序后得到 {len(docs)} 个文档")
         except Exception as e:
             error_details = ""
@@ -253,8 +253,26 @@ class QAService:
             print(f"[{model_timestamp}] 开始调用语言模型")
             
             try:
-                # 使用invoke方法替代已弃用的__call__方法
-                result = self.qa_chain.invoke({"query": question})
+                # 使用 combine_documents_chain 并传入已检索的 docs (包含MMR和重排序优化的结果)
+                # 这样可以确保使用的文档数量符合预期(10个)，且使用了更优的检索策略
+                # 之前使用 self.qa_chain.invoke({"query": question}) 会导致 RetrievalQA 重新检索(默认k=5)，忽略了上面的优化
+                
+                print(f"[{model_timestamp}] 调用文档组合链 (输入文档数: {len(docs)})")
+                chain_result = self.qa_chain.combine_documents_chain.invoke({
+                    "input_documents": docs,
+                    "question": question
+                })
+                
+                # 统一结果格式
+                answer_text = chain_result
+                if isinstance(chain_result, dict):
+                     # StuffDocumentsChain 默认输出 key 通常是 output_text
+                     answer_text = chain_result.get("output_text", chain_result.get("text", str(chain_result)))
+                
+                result = {
+                    "result": answer_text,
+                    "source_documents": docs
+                }
                 
                 # 调用模型结束时间
                 model_end_time = time.time()

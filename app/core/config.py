@@ -33,6 +33,12 @@ class Config:
         self.llm_model_type = os.getenv("LLM_MODEL_TYPE", "gpt4all")  # gpt4all 或 qwen
         self.qwen_api_key = os.getenv("QWEN_API_KEY", "")  # 阿里云千问API密钥
         
+        # 检索配置
+        try:
+            self.search_k = int(os.getenv("SEARCH_K", "10"))
+        except ValueError:
+            self.search_k = 10
+        
         # 镜像源配置
         self.hf_endpoint = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
 
