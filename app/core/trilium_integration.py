@@ -110,7 +110,7 @@ class TriliumService:
                 # Custom BFS traversal
                 from collections import deque
                 queue = deque([(root_note_id, 1)])  # (note_id, depth)
-                visited = set([root_note_id])
+                visited = {root_note_id}
                 
                 processed_count = 0
                 skipped_count = 0

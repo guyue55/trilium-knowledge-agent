@@ -126,25 +126,64 @@ class LLMService:
                 self.config.llm_model_path, 
                 trust_remote_code=True
             )
-            model = AutoModelForCausalLM.from_pretrained(
-                    self.config.llm_model_path, 
-                    trust_remote_code=True
-                )
+            
+            # 检测CUDA可用性
+            import torch
+            has_cuda = torch.cuda.is_available()
+            if has_cuda:
+                print(f"检测到CUDA设备: {torch.cuda.get_device_name(0)}")
+                print(f"CUDA版本: {torch.version.cuda}")
+                print("将优先使用GPU加速")
+            else:
+                print("警告: 未检测到CUDA设备，将使用CPU运行，可能会很慢")
             
             # 检查是否可以使用device_map和accelerate
-            try:
-                model = AutoModelForCausalLM.from_pretrained(
+            model = None
+            load_methods = [
+                # 方法1: 使用device_map自动分配 (优先尝试GPU + float16)
+                lambda: AutoModelForCausalLM.from_pretrained(
                     self.config.llm_model_path, 
-                    torch_dtype="auto",
                     device_map="auto",
-                    trust_remote_code=True
-                )
-            except ImportError as e:
-                print(f"警告: 无法使用device_map, 将在默认设备上加载模型: {e}")
-                model = AutoModelForCausalLM.from_pretrained(
+                    trust_remote_code=True,
+                    torch_dtype=torch.float16 if has_cuda else "auto",
+                    low_cpu_mem_usage=True
+                ),
+                # 方法2: 使用8位量化 (需要bitsandbytes)
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    self.config.llm_model_path,
+                    trust_remote_code=True,
+                    load_in_8bit=True,
+                    device_map="auto"
+                ),
+                # 方法3: 使用4位量化 (需要bitsandbytes)
+                lambda: AutoModelForCausalLM.from_pretrained(
+                    self.config.llm_model_path,
+                    trust_remote_code=True,
+                    load_in_4bit=True,
+                    device_map="auto"
+                ),
+                # 方法4: 默认加载 (最后的回退)
+                lambda: AutoModelForCausalLM.from_pretrained(
                     self.config.llm_model_path, 
                     trust_remote_code=True
                 )
+            ]
+            
+            for i, load_method in enumerate(load_methods):
+                try:
+                    print(f"尝试加载方法 {i+1}...")
+                    model = load_method()
+                    print(f"成功使用方法 {i+1} 加载模型")
+                    break
+                except ImportError as e:
+                    print(f"方法 {i+1} 不可用 (ImportError): {e}")
+                    continue
+                except Exception as e:
+                    print(f"方法 {i+1} 失败: {e}")
+                    continue
+            
+            if model is None:
+                raise Exception("所有模型加载方法都失败了")
             
             # 创建pipeline
             try:

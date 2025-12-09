@@ -87,7 +87,7 @@ class QAService:
                     chain_type="stuff",
                     retriever=self.knowledge_base.vector_store.as_retriever(search_kwargs={"k": 5}),
                     # 暂时禁用内存以排除问题
-                    memory=self.memory,
+                    # memory=self.memory,
                     return_source_documents=True,
                     output_key="result",
                     chain_type_kwargs={"prompt": prompt}
