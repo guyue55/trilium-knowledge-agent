@@ -123,9 +123,6 @@ class QAService:
         print(f"[{timestamp}] 开始处理问题: {question}")
         
         # 检查必要组件是否可用
-        print(f"调试: knowledge_base={self.knowledge_base}")
-        print(f"调试: knowledge_base.vector_store={self.knowledge_base.vector_store}")
-        print(f"调试: knowledge_base.vector_store is None={self.knowledge_base.vector_store is None}")
         if self.knowledge_base.vector_store is None:
             error_details = ""
             if hasattr(self, 'init_errors') and self.init_errors:
