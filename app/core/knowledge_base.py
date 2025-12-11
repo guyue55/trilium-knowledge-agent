@@ -125,11 +125,12 @@ class KnowledgeBase:
                 self.vector_store = None
             
             # 只有在需要时才初始化文本分割器
-            # self.text_splitter = RecursiveCharacterTextSplitter(
-            #     chunk_size=1000,
-            #     chunk_overlap=200
-            # )
-            # print("文本分割器初始化成功")
+            # 增加 chunk_size 和 chunk_overlap 以保留更完整的上下文
+            self.text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=2000,
+                chunk_overlap=500
+            )
+            print("文本分割器初始化成功")
         except Exception as e:
             print(f"初始化知识库组件时出错: {e}")
             import traceback
@@ -173,8 +174,8 @@ class KnowledgeBase:
         # 延迟初始化文本分割器
         if not self.text_splitter and RecursiveCharacterTextSplitter:
             self.text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200
+                chunk_size=2000,
+                chunk_overlap=500
             )
             
         if not IMPORT_SUCCESS or self.vector_store is None:

@@ -3,7 +3,9 @@
 
 import os
 import time
+import html
 import requests
+from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import List, Dict, Any, Optional
@@ -219,6 +221,19 @@ class TriliumService:
                                 print(f"Error fetching content for {current_note_id}: {e}")
                                 
                             # 3. Add to documents if content is valid
+                            if content:
+                                # Clean HTML content
+                                try:
+                                    # First unescape HTML entities
+                                    content = html.unescape(content)
+                                    # Then strip HTML tags using BeautifulSoup
+                                    # We use a newline separator to preserve paragraph structure for better chunking
+                                    soup = BeautifulSoup(content, "html.parser")
+                                    content = soup.get_text(separator="\n", strip=True)
+                                except Exception as e:
+                                    print(f"Warning: Failed to clean HTML for note {current_note_id}: {e}")
+                                    # Fallback to original content if cleaning fails
+
                             if content and len(content.strip()) > 10:
                                 documents.append({
                                     'content': content.strip(),
