@@ -1,4 +1,5 @@
---extra-index-url https://download.pytorch.org/whl/cu121
+--index-url https://download.pytorch.org/whl/cu124
+--extra-index-url https://mirrors.aliyun.com/pypi/simple/
 
 # （Front）Web framework
 streamlit>=1.22.0
@@ -16,10 +17,10 @@ chromadb==0.4.24
 onnxruntime==1.17.0
 pulsar-client==3.8.0
 
-# GPU Acceleration (PyTorch + CUDA 12.1)
-torch==2.5.1+cu121
-torchvision==0.20.1+cu121
-torchaudio==2.5.1+cu121
+# GPU Acceleration (PyTorch + CUDA 12.4)
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
 
 # AI and language processing (使用最新稳定版)
 langchain==0.1.16              # 核心框架

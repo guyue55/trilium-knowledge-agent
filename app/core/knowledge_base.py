@@ -31,21 +31,55 @@ class KnowledgeBase:
             if self.config.hf_endpoint:
                 os.environ['HF_ENDPOINT'] = self.config.hf_endpoint
             
-            # 检查本地模型是否存在，如果不存在则使用在线模型
+            # 检查本地模型是否存在，如果不存在则自动下载
             model_name = self.config.embedding_model
             local_model_path = self.config.embedding_model_local_path
-            if os.path.exists(local_model_path):
-                model_name = local_model_path
-                print(f"使用本地嵌入模型: {model_name}")
-            else:
-                print(f"警告: 本地模型不存在 ({local_model_path})")
-                print(f"将从在线源加载模型: {model_name}")
-                # 检查是否有网络连接，如果没有给出明确提示
+            
+            if not os.path.exists(local_model_path):
+                print(f"本地模型不存在 ({local_model_path})，正在从镜像源自动下载...")
                 try:
-                    import requests
-                    requests.get("https://huggingface.co", timeout=5)
-                except:
-                    print("警告: 无法连接到Hugging Face，可能需要配置代理或使用镜像源")
+                    from huggingface_hub import snapshot_download
+                    
+                    # 临时启用网络下载，覆盖环境变量设置
+                    original_offline = os.environ.get('HF_HUB_OFFLINE')
+                    if original_offline == '1':
+                        print("检测到 HF_HUB_OFFLINE=1，正在临时启用网络以进行下载...")
+                        os.environ['HF_HUB_OFFLINE'] = '0'
+                    
+                    # 设置镜像源
+                    # if not os.environ.get('HF_ENDPOINT'):
+                    #     os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+                    
+                    # # 确保在下载前再次强制设置，防止被其他库重置
+                    # os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+                    
+                    print(f"正在下载模型 {model_name} 到 {local_model_path} ...")
+                    print(f"使用镜像源: {os.environ['HF_ENDPOINT']}")
+                    
+                    snapshot_download(
+                        repo_id=model_name,
+                        local_dir=local_model_path,
+                        local_dir_use_symlinks=False,
+                        resume_download=True,
+                        # endpoint="https://hf-mirror.com"  # 显式传递endpoint参数
+                    )
+                    print("模型下载完成")
+                    
+                    # 恢复环境变量（如果之前有设置）
+                    if original_offline is not None:
+                        os.environ['HF_HUB_OFFLINE'] = original_offline
+                    
+                    # 更新模型名称为本地路径
+                    model_name = local_model_path
+                except ImportError:
+                    print("错误: 未安装 huggingface_hub，无法自动下载模型")
+                    print("请运行: pip install huggingface_hub")
+                except Exception as e:
+                    print(f"模型下载失败: {e}")
+                    print("将尝试直接从在线源加载...")
+            else:
+                print(f"使用本地嵌入模型: {local_model_path}")
+                model_name = local_model_path
             
             # 使用本地缓存的模型，避免网络连接问题
             try:
