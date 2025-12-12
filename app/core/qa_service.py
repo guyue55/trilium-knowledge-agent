@@ -4,7 +4,6 @@ from app.core.config import Config
 from app.core.llm_service import LLMService
 from app.core.knowledge_base import KnowledgeBase
 
-from langchain.chains import RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 LANGCHAIN_CHAINS_IMPORTED = True
@@ -53,7 +52,7 @@ class QAService:
             self.init_errors.append("LLM不可用")
         
         # 创建检索问答链
-        if (LANGCHAIN_CHAINS_IMPORTED and RetrievalQA and self.llm and 
+        if (LANGCHAIN_CHAINS_IMPORTED and self.llm and 
             self.knowledge_base.vector_store):
             try:
                 # 定义自定义提示词模板，针对检索场景优化
@@ -86,7 +85,7 @@ class QAService:
                     llm=self.llm,
                     chain_type="stuff",
                     prompt=prompt,
-                    verbose=True
+                    verbose=False  # 关闭详细日志以避免输出完整的Prompt
                 )
             except Exception as e:
                 error_msg = f"初始化问答链失败: {e}"
@@ -97,8 +96,6 @@ class QAService:
             self.qa_chain = None
             if not LANGCHAIN_CHAINS_IMPORTED:
                 self.init_errors.append("Langchain Chains未导入")
-            if not RetrievalQA:
-                self.init_errors.append("RetrievalQA不可用")
             if not self.llm:
                 self.init_errors.append("LLM不可用")
             # 注意：向量存储不可用和问答链创建失败是两个不同的问题
@@ -146,13 +143,13 @@ class QAService:
         try:
             # 使用混合搜索策略提高检索准确性
             # 1. 基础相似度搜索
-            docs_similarity = self.knowledge_base.vector_store.similarity_search(question, k=3)
+            docs_similarity = self.knowledge_base.vector_store.similarity_search(question, k=self.config.search_k)
             
             # 2. 最大边际相关性(MMR)搜索，提高结果的多样性和相关性
             docs_mmr = self.knowledge_base.vector_store.max_marginal_relevance_search(
                 question, 
-                k=3, 
-                fetch_k=10,
+                k=self.config.search_k, 
+                fetch_k=self.config.search_k * 2,
                 lambda_mult=0.3  # 更偏向相关性而非多样性
             )
             
@@ -175,7 +172,7 @@ class QAService:
                     seen_note_ids.add(note_id)
             
             # 限制最终结果数量
-            docs = docs[:5]
+            docs = docs[:self.config.search_k]
         except Exception as e:
             error_details = ""
             if hasattr(self, 'init_errors') and self.init_errors:

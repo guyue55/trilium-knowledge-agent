@@ -34,8 +34,8 @@ def update_knowledge_base_safe():
     
     # 设置全量更新的限制
     # 由于已修复编码和二进制文件问题，现在可以安全地增加限制
-    config.depth = int(os.getenv("TRILIUM_SAFE_DEPTH", 20))
-    config.limit = int(os.getenv("TRILIUM_SAFE_LIMIT", 20000))
+    config.depth = int(os.getenv("TRILIUM_EXPORT_DEPTH", 20))
+    config.limit = int(os.getenv("TRILIUM_EXPORT_LIMIT", 20000))
     
     # 强制使用高限制以满足用户全量更新的需求
             

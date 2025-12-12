@@ -17,9 +17,9 @@ class Config:
         self.trilium_base_url = os.getenv("TRILIUM_BASE_URL", "http://192.168.1.202:3004")
         self.trilium_token = os.getenv("TRILIUM_TOKEN", "")
         self.trilium_data_dir = os.getenv("TRILIUM_DATA_DIR", "./data/trilium")
-        self.note_ids = os.getenv("NOTE_IDS", "root").split(",")
-        self.depth = os.getenv("DEPTH", 5)
-        self.limit = os.getenv("LIMIT", 500)
+        self.note_ids = os.getenv("TRILIUM_NOTE_IDS", "root").split(",")
+        self.depth = os.getenv("TRILIUM_EXPORT_DEPTH", 10)
+        self.limit = os.getenv("TRILIUM_EXPORT_LIMIT", 5000)
         
         # 向量数据库配置
         self.vector_db_dir = os.getenv("VECTOR_DB_DIR", "./data/vector_db/embeddings")
