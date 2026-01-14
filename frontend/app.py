@@ -3,17 +3,17 @@
 Trilium知识库智能体的Streamlit前端.
 """
 
+from __future__ import annotations
 import streamlit as st
 import requests
 import os
-import copy
-import json
-from typing import Optional
+
+from typing import Optional, Any
 
 # 从环境变量获取API URL或使用默认值
 API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
 
-def send_question(question: str) -> Optional[dict]:
+def send_question(question: str) -> dict[str, Any] | None:
     """向后端API发送问题.
     
     Args:
@@ -36,7 +36,7 @@ def send_question(question: str) -> Optional[dict]:
             st.error(f"详细错误信息: {e.response.text}")
         return None
 
-def display_sources(sources: list) -> None:
+def display_sources(sources: list[Any]) -> None:
     """显示来源信息."""
     if not sources:
         return
@@ -55,7 +55,7 @@ def display_sources(sources: list) -> None:
             else:
                 st.markdown(f"- {source}")
 
-def main():
+def main() -> None:
     """主Streamlit应用程序."""
     st.set_page_config(
         page_title="Trilium知识库智能体",
@@ -73,12 +73,13 @@ def main():
     # 侧边栏
     with st.sidebar:
         st.header("⚙️ 设置")
-        api_url = st.text_input("API 地址:", value=API_URL)
+        # 显示当前使用的 API 地址，但不允许直接修改全局变量
+        st.text_input("API 地址:", value=API_URL, disabled=True)
         
         st.header("🗑️ 操作")
         if st.button("清除对话历史"):
             st.session_state.conversation = []
-            st.experimental_rerun()
+            st.rerun()
         
         st.markdown("---")
         st.markdown("### ℹ️ 关于")
@@ -95,16 +96,22 @@ def main():
     st.subheader("💬 对话")
     
     # 显示对话历史
-    for message in st.session_state.conversation:
-        if message["role"] == "user":
+    # 获取会话列表，明确类型以减少静态分析告警
+    conversation_history: list[dict[str, Any]] = st.session_state.conversation
+    
+    for message in conversation_history:
+        role = message.get("role")
+        content = message.get("content", "")
+        if role == "user":
             with st.chat_message("user"):
-                st.markdown(message["content"])
-        else:
+                st.markdown(content)
+        elif role == "assistant":
             with st.chat_message("assistant"):
-                st.markdown(message["content"])
+                st.markdown(content)
                 # 如果有来源则显示
-                if "sources" in message and message["sources"]:
-                    display_sources(message["sources"])
+                sources = message.get("sources", [])
+                if sources:
+                    display_sources(sources)
     
     # 问题输入
     if prompt := st.chat_input("请输入您的问题..."):
@@ -137,6 +144,7 @@ def main():
                 })
             else:
                 st.error("无法获取回答，请检查后端服务是否正常运行。")
+
 
 if __name__ == "__main__":
     main()

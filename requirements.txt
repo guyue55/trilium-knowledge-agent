@@ -25,7 +25,9 @@ torchaudio==2.6.0+cu124
 # AI and language processing (使用最新稳定版)
 langchain==0.1.16              # 核心框架
 langchain-community==0.0.34    # 社区集成
+langchain-openai==0.1.3         # OpenAI 集成
 langchain-core~=0.1.42         # 核心组件
+
 langsmith~=0.1.20              # 监控和调试
 dashscope~=1.14.1              # 阿里云千问API
 
