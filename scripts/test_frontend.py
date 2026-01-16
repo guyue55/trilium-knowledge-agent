@@ -10,15 +10,16 @@ response = {
         {
             "title": "测试文档1",
             "url": "http://192.168.1.202:3004/#root?noteId=test1",
-            "content": "这是测试内容1..."
+            "content": "这是测试内容1...",
         },
         {
-            "title": "测试文档2", 
+            "title": "测试文档2",
             "url": "http://192.168.1.202:3004/#root?noteId=test2",
-            "content": "这是测试内容2..."
-        }
-    ]
+            "content": "这是测试内容2...",
+        },
+    ],
 }
+
 
 # 模拟前端显示
 def display_sources(sources):
@@ -35,11 +36,12 @@ def display_sources(sources):
                         st.markdown(f"**[{title}]({url})**")
                     else:
                         st.markdown(f"**{title}**")
-                    
+
                     if content:
                         st.markdown(f"> {content}")
                 else:
                     st.markdown(f"- {source}")
+
 
 # 主界面
 st.title("测试前端显示")
@@ -51,11 +53,7 @@ st.markdown(response["answer"])
 display_sources(response["sources"])
 
 # 模拟保存到会话状态并在后续显示
-st.session_state.conversation = [{
-    "role": "assistant",
-    "content": response["answer"], 
-    "sources": response["sources"]
-}]
+st.session_state.conversation = [{"role": "assistant", "content": response["answer"], "sources": response["sources"]}]
 
 st.markdown("---")
 st.markdown("## 从会话状态显示")
@@ -74,7 +72,7 @@ if "sources" in message and message["sources"]:
                     st.markdown(f"**[{title}]({url})**")
                 else:
                     st.markdown(f"**{title}**")
-                
+
                 if content:
                     st.markdown(f"> {content}")
             else:

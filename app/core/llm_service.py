@@ -2,30 +2,33 @@
 """Trilium知识体代理的语言模型服务."""
 
 from __future__ import annotations
+
 from typing import Any
-from app.core.config import Config
+
 from loguru import logger
-from app.core.llm_drivers import LLMDriver, GPT4AllDriver, QwenAPIDriver, QwenLocalDriver, OpenAIDriver
+
+from app.core.config import Config
+from app.core.llm_drivers import GPT4AllDriver, LLMDriver, OpenAIDriver, QwenAPIDriver, QwenLocalDriver
 
 
 class LLMService:
     """用于管理语言模型的服务，支持多驱动扩展."""
-    
+
     def __init__(self, config: Config) -> None:
         """初始化LLM服务.
-        
+
         Args:
             config: 应用程序配置.
         """
         self.config = config
         self.driver: LLMDriver | None = None
         self._initialize_driver()
-    
+
     def _initialize_driver(self) -> None:
         """根据配置初始化对应的模型驱动."""
         model_type = self.config.llm_model_type.lower()
         use_api = self.config.llm_use_api
-        
+
         if model_type == "qwen":
             if use_api:
                 self.driver = QwenAPIDriver(self.config.qwen_api_key)
@@ -35,14 +38,13 @@ class LLMService:
             self.driver = OpenAIDriver(
                 self.config.openai_api_key,
                 self.config.openai_api_base,
-                self.config.openai_model_name
+                self.config.openai_model_name,
             )
         elif model_type == "gpt4all":
             self.driver = GPT4AllDriver(self.config.llm_model_path)
         else:
             logger.error(f"不支持的模型类型: {model_type}")
             return
-
 
         if self.driver:
             success = self.driver.initialize()
@@ -53,7 +55,7 @@ class LLMService:
     def get_llm(self) -> Any | None:
         """获取用于 LangChain 的模型实例."""
         return self.driver.get_llm() if self.driver else None
-    
+
     def generate_text(self, prompt: str) -> str:
         """使用语言模型生成文本."""
         if not self.driver:

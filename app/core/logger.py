@@ -1,28 +1,28 @@
 """日志配置模块."""
 
-from loguru import logger
 import os
-from datetime import datetime
+
+from loguru import logger
 
 
 def setup_logger(name: str = "trilium_knowledge", level: str = "INFO"):
     """设置日志记录器.
-    
+
     Args:
         name: 日志记录器名称
         level: 日志级别
     """
     # 移除默认的处理器
     logger.remove()
-    
+
     # 添加控制台处理器
     logger.add(
         sink="stdout",
         level=level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {file}:{line} | {message}",
-        colorize=True
+        colorize=True,
     )
-    
+
     # 添加文件处理器
     logger.add(
         sink=os.path.join("./logs", "{time:YYYY-MM-DD}.log"),
@@ -30,7 +30,7 @@ def setup_logger(name: str = "trilium_knowledge", level: str = "INFO"):
         rotation="1 day",
         retention="7 days",
         compression="zip",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {file}:{line} | {message}"
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {file}:{line} | {message}",
     )
 
 
