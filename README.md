@@ -38,9 +38,7 @@
 │   ├── 📂 vector_db/        # 向量数据库存储
 │   └── 📂 models/           # 本地模型文件
 ├── 📂 frontend/             # 前端界面
-│   ├── 📄 app.py            # Streamlit 应用
-│   ├── 📄 requirements.txt  # 前端依赖
-│   └── 📄 Dockerfile        # 前端 Docker 配置
+│   └── 📄 app.py            # Streamlit 应用
 ├── 📂 scripts/              # 实用脚本
 │   ├── 📄 setup_trilium.py  # Trilium 初始化脚本
 │   └── 📄 update_knowledge_base.py  # 知识库更新脚本
