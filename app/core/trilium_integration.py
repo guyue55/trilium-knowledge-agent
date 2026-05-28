@@ -143,6 +143,11 @@ class TriliumService:
                     if len(documents) >= self.limit:
                         logger.warning(f"Reached maximum document limit: {self.limit}")
                         break
+                        
+                    # Check for queue explosion
+                    if len(queue) > 10000:
+                        logger.warning("Queue size exceeded 10000. Aborting BFS to prevent OOM.")
+                        break
 
                     current_note_id, current_depth = queue.popleft()
 
@@ -161,32 +166,15 @@ class TriliumService:
                     retry_delay = 2
 
                     try:
-                        # Get note details with manual retry wrapper (in addition to session retry)
-                        note = None
-                        for attempt in range(max_retries):
-                            try:
-                                note = self.client.get_note(current_note_id)
-                                break
-                            except Exception as e:
-                                error_str = str(e)
-                                if "WinError 10048" in error_str or "Connection refused" in error_str:
-                                    # Serious socket error, wait longer
-                                    logger.warning(
-                                        f"Socket exhaustion detected, waiting 5s... (Attempt {attempt + 1}/{max_retries})"
-                                    )
-                                    time.sleep(5)
-                                elif attempt < max_retries - 1:
-                                    time.sleep(retry_delay * (attempt + 1))
-                                else:
-                                    logger.error(
-                                        f"Failed to get note {current_note_id} after {max_retries} attempts: {e}"
-                                    )
-                                    # Don't raise here, just continue to next note to avoid breaking the whole process
-                                    note = None
-
+                        # Get note details. The shared session already handles retries for network errors.
+                        note = self.client.get_note(current_note_id)
                         if not note:
                             error_count += 1
                             continue
+                    except Exception as e:
+                        logger.error(f"Failed to get note {current_note_id}: {e}")
+                        error_count += 1
+                        continue
 
                         # Handle legacy format if needed
                         if "note" in note and "noteId" not in note:
@@ -213,25 +201,7 @@ class TriliumService:
                         if should_process_content:
                             content = ""
                             try:
-                                content_response = None
-                                # timeout: int = ConfigConstants.TRILIUM_API_TIMEOUT
-                                for attempt in range(max_retries):
-                                    try:
-                                        content_response = self.client.get_note_content(current_note_id)
-                                        break
-                                    except Exception as e:
-                                        error_str = str(e)
-                                        if "WinError 10048" in error_str:
-                                            logger.warning(
-                                                f"Socket exhaustion detected fetching content, waiting 5s... (Attempt {attempt + 1}/{max_retries})"
-                                            )
-                                            time.sleep(3)
-                                        elif attempt < max_retries - 1:
-                                            time.sleep(retry_delay * (attempt + 1))
-                                        else:
-                                            logger.error(
-                                                f"Failed to fetch content for {title} after {max_retries} attempts: {e}"
-                                            )
+                                content_response = self.client.get_note_content(current_note_id)
 
                                 if content_response:
                                     if isinstance(content_response, str):
