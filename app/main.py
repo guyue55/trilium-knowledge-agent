@@ -117,24 +117,32 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "components": {"llm": "unknown", "vector_db": "unknown", "trilium": "unknown"},
+        "errors": []
     }
 
     # 检查 LLM
-    if hasattr(app.state, "llm_service") and app.state.llm_service.llm:
+    if hasattr(app.state, "llm_service") and app.state.llm_service and app.state.llm_service.llm:
         health_status["components"]["llm"] = "available"
     else:
         health_status["components"]["llm"] = "unavailable"
         health_status["status"] = "degraded"
 
     # 检查向量数据库
-    if hasattr(app.state, "knowledge_base") and app.state.knowledge_base.vector_store:
+    if hasattr(app.state, "knowledge_base") and app.state.knowledge_base and app.state.knowledge_base.vector_store:
         health_status["components"]["vector_db"] = "available"
     else:
         health_status["components"]["vector_db"] = "unavailable"
         health_status["status"] = "degraded"
 
-    # 注意：Trilium 连接是在 QAService 初始化时通过 TriliumService 检查的
-    # 这里可以根据需要添加实时连接检查
+    # 检查核心服务状态
+    if hasattr(app.state, "qa_service") and app.state.qa_service:
+        if hasattr(app.state.qa_service, "init_errors") and app.state.qa_service.init_errors:
+            health_status["errors"] = app.state.qa_service.init_errors
+            health_status["status"] = "degraded"
+            
+    # 如果两个核心组件都不可用，则认为系统不健康
+    if health_status["components"]["llm"] == "unavailable" and health_status["components"]["vector_db"] == "unavailable":
+        health_status["status"] = "unhealthy"
 
     return health_status
 
