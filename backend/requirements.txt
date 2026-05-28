@@ -1,9 +1,6 @@
 --index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://mirrors.aliyun.com/pypi/simple/
 
-# （Front）Web framework
-streamlit>=1.22.0
-
 # Logging
 loguru
 
@@ -31,8 +28,7 @@ langchain-core~=0.1.42         # 核心组件
 langsmith~=0.1.20              # 监控和调试
 dashscope~=1.14.1              # 阿里云千问API
 
-# Frontend and utilities
-streamlit==1.33.0
+# Utilities
 requests==2.32.3
 watchdog==3.0.0
 python-dotenv==1.0.0
@@ -57,6 +53,3 @@ beautifulsoup4>=4.12.0
 
 # Format code
 ruff
-
-#  Fronted
-streamlit>=1.22.0

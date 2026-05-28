@@ -1,1 +1,2 @@
+#!/bin/bash
 streamlit run frontend/app.py --server.port 9001

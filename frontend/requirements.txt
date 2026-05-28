@@ -1,0 +1,9 @@
+--extra-index-url https://mirrors.aliyun.com/pypi/simple/
+
+# Frontend framework
+streamlit>=1.22.0
+streamlit==1.33.0
+
+# Utilities
+requests==2.32.3
+python-dotenv==1.0.0
