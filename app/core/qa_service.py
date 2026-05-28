@@ -45,6 +45,8 @@ class QAService:
 
         # 存储不同会话的对话记忆
         self.sessions: dict[str, Any] = {}
+        self._llm_lock = None
+        self._session_lock = None
 
         # 问答缓存: (question, session_id) -> {result, timestamp}
         self.cache: dict[str, dict[str, Any]] = {}
@@ -63,8 +65,8 @@ class QAService:
 
 重要指令：
 1. 只返回纯净的答案内容，不要重复任何提示词部分
-2. 直接开始回答，不要有任何前缀或格式说明
-3. 如果无法从已知信息中得到答案，只回答："根据检索结果无法回答该问题"
+2. 必须将最终的答案内容包裹在 <answer> 和 </answer> 标签中，例如：<answer>这里是答案</answer>
+3. 如果无法从已知信息中得到答案，只回答："<answer>根据检索结果无法回答该问题</answer>"
 4. 不允许添加编造成分，全部用中文回答
 5. 请在给出答案前进行内部校验，确保回答逻辑严密、事实准确，避免出现常识性或基础性错误，但必须忠实于已知信息，不得随意改动。
 
@@ -170,6 +172,12 @@ class QAService:
 
     async def ask_question_async(self, question: str, session_id: str = "default") -> dict[str, Any]:
         """异步版本的提问方法，提供更好的并发性能."""
+        # 延迟初始化锁，确保在正确的事件循环中
+        if self._llm_lock is None:
+            self._llm_lock = asyncio.Lock()
+        if self._session_lock is None:
+            self._session_lock = asyncio.Lock()
+
         # 1. 检查缓存
         cached_result = self._check_cache(question, session_id)
         if cached_result:
@@ -181,7 +189,8 @@ class QAService:
         logger.info(f"[{timestamp}] [Session: {session_id}] 开始异步处理问题: {str(question)[:200]}")
 
         # 2. 获取会话记忆
-        memory = self._get_session_memory(session_id)
+        async with self._session_lock:
+            memory = self._get_session_memory(session_id)
 
         try:
             # 3. 执行语义搜索 (异步)
@@ -209,19 +218,20 @@ class QAService:
 
             try:
                 # 使用 to_thread 运行 LLM 调用
-                # 这种方式比 ThreadPoolExecutor 更简洁，且由 asyncio 自动管理
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self.qa_chain.invoke,
-                        {
-                            "input_documents": docs,
-                            "question": question,
-                            "chat_history": chat_history,
-                        },
-                        return_only_outputs=True,
-                    ),
-                    timeout=ConfigConstants.LLM_GENERATION_TIMEOUT,
-                )
+                # 排队执行推理，避免多并发打爆本地大模型
+                async with self._llm_lock:
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self.qa_chain.invoke,
+                            {
+                                "input_documents": docs,
+                                "question": question,
+                                "chat_history": chat_history,
+                            },
+                            return_only_outputs=True,
+                        ),
+                        timeout=ConfigConstants.LLM_GENERATION_TIMEOUT,
+                    )
 
                 # 更新对话记忆
                 if memory:
@@ -487,7 +497,7 @@ class QAService:
         }
 
     def _clean_answer(self, answer: str) -> str:
-        """清理LLM返回的答案，移除提示词内容，只保留纯答案.
+        """清理LLM返回的答案，提取 <answer> 标签内的内容.
 
         Args:
             answer: 原始答案字符串
@@ -498,7 +508,19 @@ class QAService:
         if not answer:
             return answer
 
-        # 移除可能包含的提示词开头部分，只保留真正的回答内容
+        import re
+        
+        # 优先匹配 <answer> 标签内的内容
+        match = re.search(r"<answer>(.*?)</answer>", answer, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+            
+        # 如果模型没有输出闭合标签，尝试提取 <answer> 之后的内容
+        match = re.search(r"<answer>(.*)", answer, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # 回退策略：移除可能包含的提示词开头部分，只保留真正的回答内容
         # 1. 定义可能的答案引导词（按优先级排，越准确的越前）
         indicators = [
             "答案：",
@@ -511,7 +533,7 @@ class QAService:
 
         # 检查是否包含触发短语
         if not any(phrase in answer for phrase in indicators):
-            return answer
+            return answer.strip()
 
         # 2. 从后往前找最后一个标识符
         last_idx = -1
@@ -524,9 +546,6 @@ class QAService:
         if last_idx != -1:
             answer = answer[last_idx:]
         else:
-            # 兜底方案：如果没找到引导词，仅移除开头可能存在的标识符
-            import re
-
             answer = re.sub(r"^(已知内容|对话历史|问题|答案|回答|你的回答)[:：\s]*", "", answer)
 
         return answer.strip()

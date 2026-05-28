@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 from loguru import logger
@@ -35,6 +36,7 @@ class KnowledgeBase:
         self.embedding_model = None
         self.vector_store = None
         self.text_splitter = None
+        self._db_lock = threading.Lock()  # 添加线程锁保护 ChromaDB 并发读写
 
         try:
             # 设置镜像源
@@ -171,15 +173,16 @@ class KnowledgeBase:
 
         try:
             logger.info("正在清空向量数据库...")
-            # 删除集合
-            self.vector_store.delete_collection()
+            with self._db_lock:
+                # 删除集合
+                self.vector_store.delete_collection()
 
-            # 重新初始化向量存储
-            self.vector_store = Chroma(
-                embedding_function=self.embedding_model,
-                persist_directory=self.config.vector_db_dir,
-            )
-            self.vector_store.persist()
+                # 重新初始化向量存储
+                self.vector_store = Chroma(
+                    embedding_function=self.embedding_model,
+                    persist_directory=self.config.vector_db_dir,
+                )
+                self.vector_store.persist()
             logger.info("向量数据库已成功清空")
         except Exception as e:
             logger.error(f"清空向量数据库时出错: {e}")
@@ -266,14 +269,15 @@ class KnowledgeBase:
                         f"正在处理批次 {current_batch_num}/{total_batches} (文档片段 {i + 1} - {min(i + batch_size, total_docs)})..."
                     )
 
-                    self.vector_store.add_documents(batch)
+                    with self._db_lock:
+                        self.vector_store.add_documents(batch)
 
-                    # 优化：只在最后一批或每3批时persist，减少I/O操作
-                    if hasattr(self.vector_store, "persist"):
-                        # 如果是最后一批，或者每3批，进行持久化
-                        if (current_batch_num == total_batches) or (current_batch_num % 3 == 0):
-                            self.vector_store.persist()
-                            logger.debug(f"批次 {current_batch_num} 已持久化到磁盘")
+                        # 优化：只在最后一批或每3批时persist，减少I/O操作
+                        if hasattr(self.vector_store, "persist"):
+                            # 如果是最后一批，或者每3批，进行持久化
+                            if (current_batch_num == total_batches) or (current_batch_num % 3 == 0):
+                                self.vector_store.persist()
+                                logger.debug(f"批次 {current_batch_num} 已持久化到磁盘")
 
                 logger.info(f"成功添加所有 {total_docs} 个文档片段到向量存储")
             else:
@@ -314,7 +318,8 @@ class KnowledgeBase:
             return []
 
         try:
-            return self.vector_store.similarity_search(query, k=k, filter=filter)
+            with self._db_lock:
+                return self.vector_store.similarity_search(query, k=k, filter=filter)
         except Exception as e:
             logger.error(f"语义搜索时出错: {e}")
             logger.exception("详细错误信息")
