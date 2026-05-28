@@ -158,6 +158,21 @@ class Config:
         )
 
         # ============================================
+        # 重排序模型配置 (Reranker)
+        # ============================================
+        self.use_reranker: bool = os.getenv("USE_RERANKER", "true").lower() == "true"
+        self.reranker_model: str = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
+        self.reranker_model_local_path: str = os.getenv(
+            "RERANKER_MODEL_LOCAL_PATH",
+            "./data/models/BAAI/bge-reranker-base",
+        )
+        try:
+            self.reranker_top_k: int = int(os.getenv("RERANKER_TOP_K", "5"))
+        except ValueError:
+            logger.warning("RERANKER_TOP_K 不是有效的整数，使用默认值 5")
+            self.reranker_top_k = 5
+
+        # ============================================
         # 语言模型配置
         # ============================================
         self.llm_model_path: str = os.getenv("LLM_MODEL_PATH", "./data/models/gpt4all/ggml-gpt4all-j-v1.3-groovy.bin")

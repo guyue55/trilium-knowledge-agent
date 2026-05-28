@@ -65,11 +65,27 @@ class DocumentProcessor:
                     split.metadata = {}
                 
                 # 继承和补全 Metadata
-                split.metadata["title"] = doc.metadata.get("title", "未知标题")
-                split.metadata["source"] = doc.metadata.get("source", "未知")
-                split.metadata["note_id"] = doc.metadata.get("note_id", "")
-                if "path" in doc.metadata:
-                    split.metadata["path"] = doc.metadata["path"]
+                title = doc.metadata.get("title", "未知标题")
+                source = doc.metadata.get("source", "未知")
+                note_id = doc.metadata.get("note_id", "")
+                path = doc.metadata.get("path", "")
+
+                split.metadata["title"] = title
+                split.metadata["source"] = source
+                split.metadata["note_id"] = note_id
+                if path:
+                    split.metadata["path"] = path
+
+                # 元数据注入 (Metadata Injection): 将标题和路径信息直接编码到块文本的开头
+                # 这会极大地提升向量检索在寻找具有特定限定词时的召回准确度
+                header = f"标题: {title}\n"
+                if path:
+                    header += f"路径: {path}\n"
+                header += "---\n"
+                
+                # 确保不重复注入
+                if not split.page_content.startswith("标题: "):
+                    split.page_content = header + split.page_content
             
             docs_to_add.extend(splits)
             

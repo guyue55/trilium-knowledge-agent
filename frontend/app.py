@@ -44,17 +44,25 @@ def display_sources(sources: list[Any]) -> None:
     if not sources:
         return
 
-    with st.expander("查看来源"):
-        for source in sources:
-            # 显示更友好的来源信息
+    with st.expander("查看参考原文"):
+        for i, source in enumerate(sources):
             if isinstance(source, dict):
-                title = source.get("title", "未知标题")
-                url = source.get("url")
-                # 不再显示内容详情，只显示标题和链接
-                if url:
-                    st.markdown(f"**[{title}]({url})**")
-                else:
-                    st.markdown(f"**{title}**")
+                title = source.get("title", "未知来源")
+                content = source.get("content", "")
+                score = source.get("score")
+                
+                # 构造展示标题
+                header = f"**[{i+1}] {title}**"
+                if score is not None:
+                    header += f" (相关度: {score:.2f})"
+                st.markdown(header)
+                
+                # 展示原文切片片段
+                if content:
+                    # 简单去除过多的连续换行并清理特殊的 Metadata 注入前缀显示
+                    display_content = content.replace("---", "").strip()
+                    st.info(display_content)
+                st.divider()
             else:
                 st.markdown(f"- {source}")
 

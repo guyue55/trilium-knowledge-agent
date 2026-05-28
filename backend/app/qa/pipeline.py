@@ -148,9 +148,12 @@ class QAPipeline:
                     {
                         "title": doc.metadata.get("title", "未知"),
                         "note_id": doc.metadata.get("note_id", ""),
+                        "content": doc.page_content, # 返回原文本块，供前端高亮或引用展示
                         "score": score
                     }
-                    for doc, score in raw_docs[:len(filtered_docs)]  # 保留分数信息
+                    # filtered_docs 本身没有携带 score（因为在 filter 阶段剥离了），我们从原 docs 中映射回去
+                    for doc in filtered_docs
+                    for raw_doc, score in raw_docs if raw_doc == doc
                 ]
             }
 
