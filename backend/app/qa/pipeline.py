@@ -110,13 +110,19 @@ class QAPipeline:
             return cached_result
 
         try:
-            # 2. 向量检索
-            raw_docs = self.vector_store.similarity_search_with_scores(
-                question, k=self.config.search_k * 2
+            # 2. 向量检索 (放入线程池以防阻塞主事件循环)
+            raw_docs = await asyncio.to_thread(
+                self.vector_store.similarity_search_with_scores,
+                question, 
+                k=self.config.search_k * 2
             )
 
-            # 3. 质量重排与过滤
-            filtered_docs = self.reranker.rerank_and_filter(raw_docs, question)
+            # 3. 质量重排与过滤 (放入线程池以防阻塞)
+            filtered_docs = await asyncio.to_thread(
+                self.reranker.rerank_and_filter,
+                raw_docs, 
+                question
+            )
 
             # 4. 构建上下文与历史
             context_str = self.format_context(filtered_docs)
@@ -131,9 +137,12 @@ class QAPipeline:
                 question=question
             )
 
-            # 6. LLM 推理 (加锁防爆)
+            # 6. LLM 推理 (加锁防爆并放入后台线程执行)
             async with self._llm_lock:
-                raw_answer = self.llm_adapter.generate(prompt_value)
+                raw_answer = await asyncio.to_thread(
+                    self.llm_adapter.generate,
+                    prompt_value
+                )
 
             # 7. 清理并提取答案
             final_answer = self._clean_answer(raw_answer)

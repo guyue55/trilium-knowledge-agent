@@ -123,7 +123,7 @@ async def health_check():
     """增强的健康检查端点."""
     health_status = {
         "status": "healthy",
-        "components": {"llm": "unknown", "vector_db": "unknown"},
+        "components": {"llm": "unknown", "vector_db": "unknown", "reranker": "unknown"},
         "errors": []
     }
 
@@ -140,6 +140,16 @@ async def health_check():
         health_status["status"] = "degraded"
 
     if hasattr(app.state, "qa_pipeline"):
+        # 检查重排器状态
+        if hasattr(app.state.qa_pipeline, "reranker"):
+            reranker = app.state.qa_pipeline.reranker
+            if not reranker._initialized:
+                health_status["components"]["reranker"] = "pending_initialization"
+            elif reranker._model is not None:
+                health_status["components"]["reranker"] = "advanced_cross_encoder"
+            else:
+                health_status["components"]["reranker"] = "basic_fallback"
+
         if app.state.qa_pipeline.init_errors:
             health_status["errors"] = app.state.qa_pipeline.init_errors
             health_status["status"] = "degraded"
