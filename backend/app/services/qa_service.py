@@ -146,4 +146,12 @@ class QAService:
 
         except Exception as e:
             logger.error(f"QAService 处理失败: {e}")
-            return {"answer": f"抱歉，系统处理您的请求时出现错误: {str(e)}", "sources": []}
+            return {
+                "answer": "抱歉，系统处理您的请求时出现错误。",
+                "sources": [],
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "系统处理请求时出现错误",
+                    "details": str(e)
+                }
+            }
