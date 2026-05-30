@@ -45,6 +45,7 @@ class CacheManager:
             self.cache_order.remove(key)
             
         self.cache[key] = {
+            "session_id": session_id,
             "response": response,
             "timestamp": time.time()
         }
@@ -66,3 +67,9 @@ class CacheManager:
         """清空所有缓存."""
         self.cache.clear()
         self.cache_order.clear()
+
+    def clear_session_cache(self, session_id: str) -> None:
+        """清除指定会话的所有问答缓存."""
+        keys_to_remove = [k for k, v in self.cache.items() if v.get("session_id") == session_id]
+        for k in keys_to_remove:
+            self._remove_key(k)

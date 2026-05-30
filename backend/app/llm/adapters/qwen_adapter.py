@@ -40,6 +40,16 @@ class QwenAPIAdapter(LLMAdapter):
             return "Qwen API 模型未就绪"
         return self.llm.invoke(prompt)
 
+    async def agenerate_stream(self, prompt: str):
+        if not self.llm:
+            yield "Qwen API 模型未就绪"
+            return
+        async for chunk in self.llm.astream(prompt):
+            if hasattr(chunk, "content"):
+                yield chunk.content
+            else:
+                yield str(chunk)
+
     def cleanup(self) -> None:
         self.llm = None
         logger.info("Qwen API 资源已释放")
@@ -85,6 +95,17 @@ class QwenLocalAdapter(LLMAdapter):
         if not self.llm:
             return "本地 Qwen 模型未就绪"
         return self.llm.invoke(prompt)
+
+    async def agenerate_stream(self, prompt: str):
+        if not self.llm:
+            yield "本地 Qwen 模型未就绪"
+            return
+        # HuggingFacePipeline 的 astream 可能会直接返回全量，也可能分块，做个保护
+        async for chunk in self.llm.astream(prompt):
+            if hasattr(chunk, "content"):
+                yield chunk.content
+            else:
+                yield str(chunk)
 
     def cleanup(self) -> None:
         self.llm = None

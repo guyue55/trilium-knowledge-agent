@@ -18,6 +18,12 @@ function getApiKey() {
     return document.getElementById('api-key-input').value;
 }
 
+const apiKeyInput = document.getElementById('api-key-input');
+apiKeyInput.value = localStorage.getItem('trilium_api_key') || '';
+apiKeyInput.addEventListener('input', (e) => {
+    localStorage.setItem('trilium_api_key', e.target.value);
+});
+
 // --- UI Components ---
 const chatHistory = document.getElementById('chat-history');
 const chatInput = document.getElementById('chat-input');
@@ -29,7 +35,11 @@ marked.setOptions({
     gfm: true,
     breaks: true,
     headerIds: false,
-    mangle: false
+    mangle: false,
+    highlight: function(code, lang) {
+        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+        return hljs.highlight(code, { language }).value;
+    }
 });
 
 function showToast(message, type = 'success') {
@@ -168,10 +178,13 @@ async function handleSend() {
     btnSend.disabled = true;
     
     appendMessage('user', question, true);
-    const typingIndicator = appendTyping();
+
+    const container = document.createElement('div');
+    const answerDiv = document.createElement('div');
+    appendMessage('system', container, false);
 
     try {
-        const res = await fetch('/api/v1/ask', {
+        const res = await fetch('/api/v1/ask_stream', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -180,35 +193,54 @@ async function handleSend() {
             body: JSON.stringify({ question, session_id: sessionId })
         });
 
-        typingIndicator.remove();
-
-        const data = await res.json();
-        
         if (!res.ok) {
-            let errorMsg = data.detail || '发生未知错误';
-            if (data.error_code) {
-                errorMsg = `[${data.error_code}] ${errorMsg}`;
+            const errData = await res.json();
+            throw new Error(errData.detail || '请求失败');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullAnswer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            let lines = buffer.split('\n');
+            buffer = lines.pop(); 
+            
+            for (let line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.substring(6).trim();
+                    if (!dataStr) continue;
+                    
+                    try {
+                        const event = JSON.parse(dataStr);
+                        if (event.type === 'sources' && event.data && event.data.length > 0) {
+                            container.innerHTML = buildThoughtProcess(event.data);
+                            container.appendChild(answerDiv);
+                        } else if (event.type === 'chunk') {
+                            if (!container.contains(answerDiv)) {
+                                container.appendChild(answerDiv);
+                            }
+                            fullAnswer += event.data;
+                            let displayAnswer = fullAnswer.replace(/<answer>|<\/answer>/g, '');
+                            answerDiv.innerHTML = DOMPurify.sanitize(marked.parse(displayAnswer));
+                            chatHistory.scrollTop = chatHistory.scrollHeight;
+                        } else if (event.type === 'error') {
+                            showToast(event.data.message || '流式传输报错', 'error');
+                            answerDiv.innerHTML += `<br/><br/>⚠️ **错误**: ${event.data.message}`;
+                        }
+                    } catch (e) {
+                        console.error('JSON parse error on stream', e, dataStr);
+                    }
+                }
             }
-            showToast(errorMsg, 'error');
-            appendMessage('system', `⚠️ **抱歉，处理失败**\n\n\`\`\`text\n${errorMsg}\n\`\`\``, true);
-            return;
         }
-
-        const container = document.createElement('div');
-        // Thought process
-        if (data.sources && data.sources.length > 0) {
-            container.innerHTML += buildThoughtProcess(data.sources);
-        }
-        // Answer
-        const answerDiv = document.createElement('div');
-        answerDiv.innerHTML = DOMPurify.sanitize(marked.parse(data.answer));
-        container.appendChild(answerDiv);
-
-        appendMessage('system', container, false);
-
     } catch (e) {
-        typingIndicator.remove();
-        showToast('网络连接失败，无法连接到后端服务器', 'error');
+        showToast(e.message || '网络连接失败，无法连接到后端服务器', 'error');
     } finally {
         btnSend.disabled = false;
         chatInput.focus();

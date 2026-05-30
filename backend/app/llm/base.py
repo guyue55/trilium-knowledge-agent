@@ -43,6 +43,18 @@ class LLMAdapter(ABC):
         pass
 
     @abstractmethod
+    async def agenerate_stream(self, prompt: str) -> Any:
+        """异步生成文本流.
+        
+        Args:
+            prompt: 输入的提示词
+            
+        Yields:
+            str: 生成的文本片段
+        """
+        pass
+
+    @abstractmethod
     def cleanup(self) -> None:
         """释放模型及显存/内存资源."""
         pass

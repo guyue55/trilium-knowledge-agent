@@ -2,7 +2,7 @@
 """问答系统的会话内存与历史记录管理."""
 
 import asyncio
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from loguru import logger

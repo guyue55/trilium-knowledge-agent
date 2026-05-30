@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from typing import Any
+import json
 from fastapi import APIRouter, Depends, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_qa_service, get_config, get_vector_store
 from app.api.schemas import AnswerResponse, QuestionRequest
@@ -33,6 +35,24 @@ async def ask_question(
 
     return AnswerResponse(answer=result["answer"], sources=result.get("sources", []))
 
+@router.post("/ask_stream")
+async def ask_question_stream(
+    request: QuestionRequest,
+    qa_service: QAService = Depends(get_qa_service),
+    _token: str = Depends(verify_api_key),
+):
+    """Ask a question based on the knowledge base with SSE streaming."""
+    session_id = request.session_id or "default"
+    
+    async def event_generator():
+        try:
+            async for event in qa_service.ask_stream(request.question, session_id=session_id):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'data': {'message': str(e)}})}\n\n"
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @router.get("/status")
 async def get_status(_token: str = Depends(verify_api_key)) -> dict[str, Any]:
     """Get the status of the knowledge agent."""
@@ -55,6 +75,7 @@ async def clear_session(
 ) -> dict[str, Any]:
     """Clear conversation history for a session."""
     cleared = await qa_service.session_manager.clear_session(session_id)
+    qa_service.cache_manager.clear_session_cache(session_id)
     if cleared:
         return {"status": "success", "message": f"Session {session_id} cleared"}
     return {"status": "success", "message": f"Session {session_id} not found or already cleared"}

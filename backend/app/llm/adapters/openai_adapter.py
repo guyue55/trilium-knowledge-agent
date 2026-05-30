@@ -45,6 +45,16 @@ class OpenAIAdapter(LLMAdapter):
             return "OpenAI 模型未就绪"
         return self.llm.invoke(prompt).content
 
+    async def agenerate_stream(self, prompt: str):
+        if not self.llm:
+            yield "OpenAI 模型未就绪"
+            return
+        async for chunk in self.llm.astream(prompt):
+            if hasattr(chunk, "content"):
+                yield chunk.content
+            else:
+                yield str(chunk)
+
     def cleanup(self) -> None:
         self.llm = None
         logger.info("OpenAI 资源已释放")

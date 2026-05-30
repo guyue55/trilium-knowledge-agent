@@ -22,6 +22,13 @@ class MockLLMAdapter(LLMAdapter):
         time.sleep(1.5) # 模拟生成延迟
         return "<answer>这是一个 Mock 答案。由于真实的本地大模型加载失败，系统自动降级采用了模拟生成引擎，以保证问答管道的连通性。</answer>"
         
+    async def agenerate_stream(self, prompt: str):
+        import asyncio
+        msg = "<answer>这是一个 Mock 答案。由于真实的本地大模型加载失败，系统自动降级采用了模拟生成引擎，以保证问答管道的连通性。</answer>"
+        for i in range(0, len(msg), 3):
+            await asyncio.sleep(0.05)
+            yield msg[i:i+3]
+        
     def get_langchain_llm(self) -> Any:
         # Mock 一个支持基本调用的占位对象
         class FakeLangchainLLM:

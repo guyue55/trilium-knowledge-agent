@@ -39,6 +39,16 @@ class GPT4AllAdapter(LLMAdapter):
             return "GPT4All 模型未就绪"
         return self.llm.invoke(prompt)
 
+    async def agenerate_stream(self, prompt: str):
+        if not self.llm:
+            yield "GPT4All 模型未就绪"
+            return
+        async for chunk in self.llm.astream(prompt):
+            if hasattr(chunk, "content"):
+                yield chunk.content
+            else:
+                yield str(chunk)
+
     def cleanup(self) -> None:
         self.llm = None
         logger.info("GPT4All 资源已释放")

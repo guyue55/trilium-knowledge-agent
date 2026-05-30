@@ -32,9 +32,15 @@ class Reranker:
                 model_name_or_path = self.config.reranker_model
 
             from FlagEmbedding import FlagReranker
+            import torch
             logger.info(f"正在加载重排模型 (FlagReranker): {model_name_or_path}")
-            # 使用 fp16 或 cpu 加载 (针对没有独显的环境可以做相应处理，FlagReranker 会自动处理)
-            self._model = FlagReranker(model_name_or_path, use_fp16=True)
+            
+            # 动态检测硬件环境，非 NVIDIA 显卡或纯 CPU 强制关闭 fp16，防止 PyTorch 报错
+            use_fp16 = torch.cuda.is_available()
+            if not use_fp16:
+                logger.info("未检测到 CUDA 环境，将禁用 fp16 混合精度以保证兼容性")
+                
+            self._model = FlagReranker(model_name_or_path, use_fp16=use_fp16)
             logger.info("重排模型加载成功")
         except ImportError:
             logger.warning("未安装 FlagEmbedding，无法使用高级重排功能，将降级为基础过滤规则。请运行: pip install FlagEmbedding")

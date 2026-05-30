@@ -155,3 +155,70 @@ class QAService:
                     "details": str(e)
                 }
             }
+
+    async def ask_stream(self, question: str, session_id: str = "default"):
+        """流式处理用户提问."""
+        logger.info(f"QAService: 流式收到提问 '{question}' (Session: {session_id})")
+
+        cached_result = self.cache_manager.get(question, session_id)
+        if cached_result:
+            logger.info("QAService: 流式命中问答缓存，直接返回")
+            yield {"type": "sources", "data": cached_result.get("sources", [])}
+            yield {"type": "chunk", "data": cached_result["answer"]}
+            return
+
+        try:
+            # 1. 委托检索服务
+            filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
+            
+            sources = []
+            for doc in filtered_docs:
+                for raw_doc, score in raw_docs:
+                    if raw_doc == doc:
+                        sources.append({
+                            "title": doc.metadata.get("title", "未知"),
+                            "note_id": doc.metadata.get("note_id", ""),
+                            "content": doc.page_content,
+                            "score": score
+                        })
+                        break
+            
+            yield {"type": "sources", "data": sources}
+
+            # 2. 构建上下文与历史
+            context_str = self._format_context(filtered_docs)
+            history = await self.session_manager.get_history(session_id)
+            history_str = self._format_history(history)
+
+            # 3. 生成 Prompt
+            prompt_template = self._get_prompt_template()
+            prompt_value = prompt_template.format(
+                context=context_str,
+                chat_history=history_str,
+                question=question
+            )
+
+            # 4. LLM 推理 (流式)
+            full_answer = ""
+            async with self._llm_lock:
+                async for chunk in self.llm_adapter.agenerate_stream(prompt_value):
+                    full_answer += chunk
+                    yield {"type": "chunk", "data": chunk}
+
+            # 5. 清理答案并记录历史
+            final_answer = self._clean_answer(full_answer)
+            await self.session_manager.add_interaction(session_id, question, final_answer)
+
+            # 6. 保存缓存
+            self.cache_manager.set(question, session_id, {
+                "answer": final_answer,
+                "sources": sources
+            })
+
+        except Exception as e:
+            logger.error(f"QAService 流式处理失败: {e}")
+            yield {"type": "error", "data": {
+                "code": "INTERNAL_ERROR",
+                "message": "系统处理请求时出现错误",
+                "details": str(e)
+            }}
