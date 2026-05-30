@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Dict, Optional
 
-from app.core.config import Config
+from app.core.config import Config, ConfigConstants
 
 
 class CacheManager:
@@ -28,7 +28,7 @@ class CacheManager:
         if key in self.cache:
             cache_item = self.cache[key]
             # 检查是否过期
-            if time.time() - cache_item["timestamp"] < self.config.QA_CACHE_TTL:
+            if time.time() - cache_item["timestamp"] < ConfigConstants.QA_CACHE_TTL:
                 # 更新 LRU 顺序
                 self.cache_order.remove(key)
                 self.cache_order.append(key)
@@ -51,7 +51,7 @@ class CacheManager:
         self.cache_order.append(key)
         
         # 清理超出容量的旧缓存
-        while len(self.cache) > self.config.QA_CACHE_SIZE:
+        while len(self.cache) > ConfigConstants.QA_CACHE_SIZE:
             oldest_key = self.cache_order.pop(0)
             self._remove_key(oldest_key)
 
