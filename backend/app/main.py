@@ -15,11 +15,11 @@ from loguru import logger
 
 from app.api.endpoints import router as api_router
 from app.core.config import get_config
+from app.core.container import container
 from app.core.security import mask_sensitive_data
 from app.llm.factory import LLMFactory
 from app.qa.cache import CacheManager
 from app.qa.memory import SessionManager
-from app.qa.pipeline import QAPipeline
 from app.retrieval.embeddings import EmbeddingAdapter
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import ChromaAdapter
@@ -38,29 +38,17 @@ if config.hf_endpoint:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI 生命周期管理器：在启动时挂载组件，关闭时清理资源."""
-    logger.info("正在初始化全局组件...")
+    logger.info("正在初始化全局单例组件并注入 Container...")
     try:
         # 1. 实例化缓存与内存管理
-        cache_manager = CacheManager(config)
-        session_manager = SessionManager()
+        container.cache_manager = CacheManager(config)
+        container.session_manager = SessionManager()
 
         # 2. 异步化初始化耗时模型组件
         try:
-            llm_adapter = await asyncio.to_thread(LLMFactory.create_llm, config)
-            if not llm_adapter or not hasattr(llm_adapter, 'generate'):
-                raise ValueError("LLM Adapter 初始化为空或无效")
+            container.llm_adapter = await asyncio.to_thread(LLMFactory.create_llm, config)
         except Exception as e:
-            logger.warning(f"LLM 加载失败: {e}，启用 MockLLMAdapter 进行降级模拟测试")
-            class MockLLMAdapter:
-                def generate(self, prompt: str) -> str:
-                    import time
-                    time.sleep(3) # 模拟大模型缓慢的生成过程
-                    return "<answer>这是一个 Mock 答案。由于真实的本地大模型尚未下载，系统自动采用了模拟大模型引擎处理您的请求。请放心，核心管道流转一切正常！</answer>"
-                def get_langchain_llm(self):
-                    return True
-                def cleanup(self):
-                    pass
-            llm_adapter = MockLLMAdapter()
+            container.set_error(f"LLMFactory 创建异常: {e}")
         
         embedding_adapter = EmbeddingAdapter(config)
         try:
@@ -72,37 +60,17 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Embedding 加载失败: {e}，启用 FakeEmbeddings 进行降级模拟测试")
             from langchain_community.embeddings import FakeEmbeddings
             embed_model = FakeEmbeddings(size=384)
+            container.set_error(f"Embedding 加载异常，已降级: {e}")
         
-        vector_store = ChromaAdapter(config, embed_model)
-        await asyncio.to_thread(vector_store.initialize)
+        container.vector_store = ChromaAdapter(config, embed_model)
+        await asyncio.to_thread(container.vector_store.initialize)
         
-        reranker = Reranker(config)
+        container.reranker = Reranker(config)
 
-        # 3. 组装 Pipeline
-        qa_pipeline = QAPipeline(
-            config=config,
-            llm_adapter=llm_adapter,
-            vector_store=vector_store,
-            reranker=reranker,
-            cache_manager=cache_manager,
-            session_manager=session_manager
-        )
-
-        # 挂载到 app.state
-        app.state.llm_adapter = llm_adapter
-        app.state.vector_store = vector_store
-        app.state.qa_pipeline = qa_pipeline
-
-        logger.info("全局组件初始化完成")
+        logger.info("全局组件装载完成")
     except Exception as e:
-        logger.error(f"全局服务初始化失败: {e}")
+        container.set_error(f"全局服务初始化发生致命错误: {e}")
         logger.exception("详细错误信息")
-
-    if hasattr(app.state, "qa_pipeline") and app.state.qa_pipeline.init_errors:
-        errors = app.state.qa_pipeline.init_errors
-        logger.warning("服务初始化存在以下错误:")
-        for error in errors:
-            logger.warning(f"  - {error}")
 
     # ===============================
     # 让 FastAPI 服务在此处运行
@@ -112,9 +80,8 @@ async def lifespan(app: FastAPI):
     # ===============================
     # 服务关闭后的资源清理逻辑
     # ===============================
-    logger.info("应用正在关闭，释放资源...")
-    if hasattr(app.state, "llm_adapter") and hasattr(app.state.llm_adapter, "cleanup"):
-        app.state.llm_adapter.cleanup()
+    logger.info("应用正在关闭，释放 Container 资源...")
+    container.cleanup()
     logger.info("应用已安全关闭")
 
 
@@ -151,35 +118,33 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "components": {"llm": "unknown", "vector_db": "unknown", "reranker": "unknown"},
-        "errors": []
+        "errors": container.init_errors
     }
 
-    if hasattr(app.state, "llm_adapter") and app.state.llm_adapter and app.state.llm_adapter.get_langchain_llm():
-        health_status["components"]["llm"] = "available"
+    if container.llm_adapter and container.llm_adapter.get_langchain_llm():
+        # 如果是 Mock，标记为 degraded
+        if container.llm_adapter.__class__.__name__ == "MockLLMAdapter":
+            health_status["components"]["llm"] = "degraded (mocked)"
+            health_status["status"] = "degraded"
+        else:
+            health_status["components"]["llm"] = "available"
     else:
         health_status["components"]["llm"] = "unavailable"
         health_status["status"] = "degraded"
 
-    if hasattr(app.state, "vector_store") and app.state.vector_store and app.state.vector_store.vector_store:
+    if container.vector_store and container.vector_store.vector_store:
         health_status["components"]["vector_db"] = "available"
     else:
         health_status["components"]["vector_db"] = "unavailable"
         health_status["status"] = "degraded"
 
-    if hasattr(app.state, "qa_pipeline"):
-        # 检查重排器状态
-        if hasattr(app.state.qa_pipeline, "reranker"):
-            reranker = app.state.qa_pipeline.reranker
-            if not reranker._initialized:
-                health_status["components"]["reranker"] = "pending_initialization"
-            elif getattr(reranker, "_model", None) is not None:
-                health_status["components"]["reranker"] = "advanced_cross_encoder"
-            else:
-                health_status["components"]["reranker"] = "basic_fallback"
-
-        if app.state.qa_pipeline.init_errors:
-            health_status["errors"] = app.state.qa_pipeline.init_errors
-            health_status["status"] = "degraded"
+    if container.reranker:
+        if not container.reranker._initialized:
+            health_status["components"]["reranker"] = "pending_initialization"
+        elif getattr(container.reranker, "_model", None) is not None:
+            health_status["components"]["reranker"] = "advanced_cross_encoder"
+        else:
+            health_status["components"]["reranker"] = "basic_fallback"
             
     if health_status["components"]["llm"] == "unavailable" and health_status["components"]["vector_db"] == "unavailable":
         health_status["status"] = "unhealthy"
