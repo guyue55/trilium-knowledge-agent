@@ -4,14 +4,20 @@
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 
-from app.api.deps import get_qa_service
+from app.api.deps import get_qa_service, get_config, get_vector_store
 from app.api.schemas import AnswerResponse, QuestionRequest
-from app.core.config import get_config
+from app.core.config import Config
 from app.core.container import container
 from app.core.security import verify_api_key
+from app.retrieval.bm25 import BM25StoreAdapter
+from app.retrieval.vector_store import VectorStoreAdapter
 from app.services.qa_service import QAService
+from app.services.sync_service import SyncService
+
+def get_bm25_store() -> BM25StoreAdapter:
+    return container.bm25_store
 
 router = APIRouter()
 
@@ -55,7 +61,13 @@ async def clear_session(
 
 @router.post("/sync")
 async def sync_knowledge_base(
+    background_tasks: BackgroundTasks,
+    config: Config = Depends(get_config),
+    vector_store: VectorStoreAdapter = Depends(get_vector_store),
+    bm25_store: BM25StoreAdapter = Depends(get_bm25_store),
     _token: str = Depends(verify_api_key)
 ) -> dict[str, Any]:
-    """Sync the vector database with Trilium Notes (Placeholder)."""
-    return {"status": "info", "message": "知识库同步已触发（目前仅作 API 占位，后端爬虫尚未接入）"}
+    """Sync the vector database with Trilium Notes."""
+    sync_service = SyncService(config, vector_store, bm25_store)
+    background_tasks.add_task(sync_service.run_sync_job)
+    return {"status": "success", "message": "知识库同步作业已在后台启动"}

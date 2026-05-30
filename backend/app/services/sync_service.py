@@ -1,0 +1,73 @@
+# -*- coding: utf-8 -*-
+"""知识库同步服务.
+
+负责协调 TriliumCrawler, DocumentProcessor, 和 VectorStore，实现后台数据构建。
+"""
+
+import asyncio
+from loguru import logger
+
+from app.core.config import Config
+from app.retrieval.bm25 import BM25StoreAdapter
+from app.retrieval.vector_store import VectorStoreAdapter
+from app.trilium.client import TriliumClient
+from app.trilium.crawler import TriliumCrawler
+from app.retrieval.document_processor import DocumentProcessor
+
+class SyncService:
+    """管理同步作业的领域服务."""
+    
+    def __init__(self, config: Config, vector_store: VectorStoreAdapter, bm25_store: BM25StoreAdapter = None):
+        self.config = config
+        self.vector_store = vector_store
+        self.bm25_store = bm25_store
+        
+    async def run_sync_job(self) -> None:
+        """执行知识库全量同步作业."""
+        logger.info("开始执行知识库后台同步作业...")
+        
+        try:
+            # 1. 连接 Trilium
+            client = TriliumClient(self.config.trilium_base_url, self.config.trilium_token)
+            if not client.is_connected():
+                logger.error("SyncService: Trilium 客户端连接失败，终止同步。")
+                return
+            
+            # 2. 爬取原始文档
+            crawler = TriliumCrawler(self.config, client)
+            # crawler 的 load_documents 是同步阻塞函数，用 to_thread 包装
+            raw_docs = await asyncio.to_thread(crawler.load_documents)
+            
+            if not raw_docs:
+                logger.warning("SyncService: 爬取到 0 篇文档。")
+                return
+            
+            logger.info(f"SyncService: 成功爬取 {len(raw_docs)} 篇原始文档，开始切分...")
+            
+            # 3. 切分文档
+            processor = DocumentProcessor(self.config)
+            from langchain_core.documents import Document
+            # 将 dict 转成 Langchain Document 格式以便后续处理
+            langchain_docs = [
+                Document(page_content=d["content"], metadata={k: v for k, v in d.items() if k != "content"}) 
+                for d in raw_docs
+            ]
+            processed_docs = processor.split_documents(langchain_docs)
+            
+            logger.info(f"SyncService: 文档切分完毕，共 {len(processed_docs)} 个碎片切片。")
+            
+            # 4. 更新向量库
+            logger.info("SyncService: 开始清空旧向量库...")
+            await asyncio.to_thread(self.vector_store.clear)
+            
+            logger.info("SyncService: 开始将新切片灌入向量库...")
+            await asyncio.to_thread(self.vector_store.add_documents, processed_docs)
+            
+            if self.bm25_store:
+                logger.info("SyncService: 开始构建并持久化 BM25 稀疏索引...")
+                await asyncio.to_thread(self.bm25_store.build_and_save, processed_docs)
+            
+            logger.info("🎉 知识库后台同步作业圆满完成！")
+            
+        except Exception as e:
+            logger.exception(f"知识库后台同步作业发生严重异常: {e}")

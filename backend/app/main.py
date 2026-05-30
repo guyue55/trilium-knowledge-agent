@@ -21,6 +21,7 @@ from app.llm.factory import LLMFactory
 from app.qa.cache import CacheManager
 from app.qa.memory import SessionManager
 from app.retrieval.embeddings import EmbeddingAdapter
+from app.retrieval.bm25 import BM25StoreAdapter
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import ChromaAdapter
 
@@ -64,6 +65,8 @@ async def lifespan(app: FastAPI):
         
         container.vector_store = ChromaAdapter(config, embed_model)
         await asyncio.to_thread(container.vector_store.initialize)
+        
+        container.bm25_store = BM25StoreAdapter(config)
         
         container.reranker = Reranker(config)
 
