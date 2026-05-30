@@ -11,6 +11,8 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from loguru import logger
 
 from app.api.endpoints import router as api_router
@@ -109,10 +111,13 @@ app.add_middleware(
 # 包含API路由
 app.include_router(api_router, prefix="/api/v1")
 
+# 挂载前端静态文件
+frontend_dir = Path(__file__).parent.parent.parent / "frontend" / "public"
+app.mount("/assets", StaticFiles(directory=str(frontend_dir)), name="assets")
 
 @app.get("/")
 async def root():
-    return {"message": "欢迎使用Trilium知识库智能体API"}
+    return FileResponse(str(frontend_dir / "index.html"))
 
 
 @app.get("/health")
