@@ -8,15 +8,16 @@ from requests.adapters import HTTPAdapter
 from trilium_py.client import ETAPI
 from urllib3.util.retry import Retry
 
-from app.core.config import ConfigConstants
+from app.core.config import get_config
 
 
 def _get_shared_session() -> requests.Session:
     """创建带有重试策略的共享Session."""
+    config = get_config()
     session = requests.Session()
     retry_strategy = Retry(
-        total=ConfigConstants.DEFAULT_MAX_RETRIES,
-        backoff_factor=ConfigConstants.DEFAULT_RETRY_BACKOFF_FACTOR,
+        total=config.max_retries,
+        backoff_factor=config.retry_backoff_factor,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
     )

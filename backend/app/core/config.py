@@ -20,28 +20,10 @@ class ConfigConstants:
     """配置常量类，用于存储硬编码的配置值.
     将所有魔法数字和字符串集中管理，便于维护和调整。
     """
-    # 文本分割参数
-    DEFAULT_CHUNK_SIZE: int = 800
-    DEFAULT_CHUNK_OVERLAP: int = 150
-
     # 搜索参数
-    DEFAULT_SEARCH_K: int = 10
     MAX_SEARCH_RESULTS: int = 20
     MMR_FETCH_K_MULTIPLIER: int = 2
     MMR_LAMBDA_MULT: float = 0.3
-
-    # 批处理参数
-    VECTOR_DB_BATCH_SIZE: int = 5000
-    VECTOR_DB_PERSIST_INTERVAL: int = 3
-
-    # 重试参数
-    DEFAULT_MAX_RETRIES: int = 5
-    DEFAULT_RETRY_BACKOFF_FACTOR: float = 1.0
-
-    # 超时参数（秒）
-    TRILIUM_API_TIMEOUT: int = 30
-    VECTOR_DB_QUERY_TIMEOUT: int = 10
-    LLM_GENERATION_TIMEOUT: int = 120
 
     # 内容过滤参数
     MIN_CONTENT_LENGTH: int = 10
@@ -50,10 +32,6 @@ class ConfigConstants:
 
     # API限制参数
     MAX_QUESTION_LENGTH: int = 1000
-
-    # 缓存配置
-    QA_CACHE_SIZE: int = 100
-    QA_CACHE_TTL: int = 3600
 
     # 安全配置
     API_KEY_HEADER_NAME: str = "X-API-Key"
@@ -74,7 +52,7 @@ class Config(BaseSettings):
     # Trilium配置
     # ============================================
     trilium_base_url: str = Field(default="http://localhost:8080")
-    trilium_token: str = Field(default="")
+    trilium_token: str = Field(default="", repr=False)
     trilium_data_dir: str = Field(default="./data/trilium")
     trilium_note_ids: str = Field(default="root")
     
@@ -118,23 +96,42 @@ class Config(BaseSettings):
     llm_model_path: str = Field(default="./data/models/gpt4all/ggml-gpt4all-j-v1.3-groovy.bin")
     llm_model_type: str = Field(default="gpt4all")
     llm_use_api: bool = Field(default=False)
-    qwen_api_key: str = Field(default="")
-    openai_api_key: str = Field(default="")
+    qwen_api_key: str = Field(default="", repr=False)
+    openai_api_key: str = Field(default="", repr=False)
     openai_api_base: str = Field(default="https://api.openai.com/v1")
     openai_model_name: str = Field(default="gpt-3.5-turbo")
 
     # ============================================
     # 检索和分割配置
     # ============================================
-    search_k: int = Field(default=ConfigConstants.DEFAULT_SEARCH_K, ge=1, le=ConfigConstants.MAX_SEARCH_RESULTS)
-    chunk_size: int = Field(default=ConfigConstants.DEFAULT_CHUNK_SIZE, ge=1)
-    chunk_overlap: int = Field(default=ConfigConstants.DEFAULT_CHUNK_OVERLAP, ge=0)
+    search_k: int = Field(default=10, ge=1, le=ConfigConstants.MAX_SEARCH_RESULTS)
+    chunk_size: int = Field(default=800, ge=1)
+    chunk_overlap: int = Field(default=150, ge=0)
+
+    # ============================================
+    # 批处理与网络配置
+    # ============================================
+    vector_db_batch_size: int = Field(default=5000, ge=100)
+    vector_db_persist_interval: int = Field(default=3, ge=1)
+    
+    max_retries: int = Field(default=5, ge=0)
+    retry_backoff_factor: float = Field(default=1.0, ge=0.0)
+    
+    trilium_api_timeout: int = Field(default=30, ge=1)
+    vector_db_query_timeout: int = Field(default=10, ge=1)
+    llm_generation_timeout: int = Field(default=120, ge=1)
+
+    # ============================================
+    # 缓存配置
+    # ============================================
+    qa_cache_size: int = Field(default=100, ge=0)
+    qa_cache_ttl: int = Field(default=3600, ge=0)
 
     # ============================================
     # 镜像源与安全配置
     # ============================================
     hf_endpoint: str = Field(default="https://hf-mirror.com")
-    api_auth_key: str = Field(default="")
+    api_auth_key: str = Field(default="", repr=False)
 
     @model_validator(mode='after')
     def validate_complex_rules(self) -> "Config":

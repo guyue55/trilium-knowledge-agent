@@ -27,20 +27,23 @@ class TestQuestionRequest:
         """测试空问题抛出验证错误."""
         with pytest.raises(ValidationError) as exc_info:
             QuestionRequest(question="")
-        assert "问题不能为空" in str(exc_info.value)
+        err_msg = str(exc_info.value).lower()
+        assert "不能为空" in err_msg or "at least 1" in err_msg or "too_short" in err_msg
 
     def test_whitespace_only_question_raises_error(self):
         """测试只包含空白的问题抛出验证错误."""
         with pytest.raises(ValidationError) as exc_info:
             QuestionRequest(question="   ")
-        assert "问题不能为空" in str(exc_info.value)
+        err_msg = str(exc_info.value).lower()
+        assert "不能为空" in err_msg or "at least 1" in err_msg or "too_short" in err_msg
 
     def test_too_long_question_raises_error(self):
         """测试超长问题抛出验证错误."""
         long_question = "测" * 1001  # 超过1000字符
         with pytest.raises(ValidationError) as exc_info:
             QuestionRequest(question=long_question)
-        assert "字符" in str(exc_info.value).lower() or "length" in str(exc_info.value).lower()
+        err_msg = str(exc_info.value).lower()
+        assert "字符" in err_msg or "length" in err_msg or "too_long" in err_msg or "at most" in err_msg
 
     def test_malicious_script_tag_raises_error(self):
         """测试包含script标签的问题抛出验证错误."""

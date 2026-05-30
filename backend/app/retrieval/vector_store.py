@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from app.core.config import Config, ConfigConstants
+from app.core.config import Config
 
 
 class VectorStoreAdapter(ABC):
@@ -85,7 +85,7 @@ class ChromaAdapter(VectorStoreAdapter):
             return
 
         total_docs = len(documents)
-        batch_size = ConfigConstants.VECTOR_DB_BATCH_SIZE
+        batch_size = self.config.vector_db_batch_size
 
         try:
             for i in range(0, total_docs, batch_size):
@@ -98,7 +98,7 @@ class ChromaAdapter(VectorStoreAdapter):
                     self.vector_store.add_documents(batch)
                     
                     if hasattr(self.vector_store, "persist"):
-                        if current_batch == total_batches or current_batch % 3 == 0:
+                        if current_batch == total_batches or current_batch % self.config.vector_db_persist_interval == 0:
                             self.vector_store.persist()
         except Exception as e:
             logger.error(f"添加文档到 ChromaDB 失败: {e}")

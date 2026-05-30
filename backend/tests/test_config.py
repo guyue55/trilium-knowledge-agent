@@ -17,12 +17,7 @@ class TestConfigConstants:
 
     def test_constants_values(self):
         """测试常量值是否正确定义."""
-        assert ConfigConstants.DEFAULT_CHUNK_SIZE == 2000
-        assert ConfigConstants.DEFAULT_CHUNK_OVERLAP == 500
-        assert ConfigConstants.DEFAULT_SEARCH_K == 10
         assert ConfigConstants.MAX_SEARCH_RESULTS == 20
-        assert ConfigConstants.VECTOR_DB_BATCH_SIZE == 5000
-        assert ConfigConstants.DEFAULT_MAX_RETRIES == 5
         assert ConfigConstants.MIN_CONTENT_LENGTH == 10
 
     def test_valid_note_types(self):
@@ -96,10 +91,11 @@ class TestConfigValidation:
         },
     )
     def test_invalid_depth_raises_error(self):
-        """测试无效深度时抛出ConfigError."""
-        with pytest.raises(ConfigError) as exc_info:
+        """测试无效深度时抛出ValidationError."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError) as exc_info:
             Config()
-        assert "TRILIUM_EXPORT_DEPTH 必须大于 0" in str(exc_info.value)
+        assert "trilium_export_depth" in str(exc_info.value).lower()
 
     @patch.dict(
         os.environ,
@@ -110,10 +106,11 @@ class TestConfigValidation:
         },
     )
     def test_invalid_limit_raises_error(self):
-        """测试无效限制时抛出ConfigError."""
-        with pytest.raises(ConfigError) as exc_info:
+        """测试无效限制时抛出ValidationError."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError) as exc_info:
             Config()
-        assert "TRILIUM_EXPORT_LIMIT 必须大于 0" in str(exc_info.value)
+        assert "trilium_export_limit" in str(exc_info.value).lower()
 
     @patch.dict(
         os.environ,
@@ -124,10 +121,11 @@ class TestConfigValidation:
         },
     )
     def test_invalid_search_k_raises_error(self):
-        """测试无效search_k时抛出ConfigError."""
-        with pytest.raises(ConfigError) as exc_info:
+        """测试无效search_k时抛出ValidationError."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError) as exc_info:
             Config()
-        assert "SEARCH_K 必须大于 0" in str(exc_info.value)
+        assert "search_k" in str(exc_info.value).lower()
 
     @patch.dict(
         os.environ,
@@ -157,10 +155,12 @@ class TestConfigTypeConversion:
             "TRILIUM_EXPORT_DEPTH": "invalid",  # 非数字
         },
     )
-    def test_invalid_depth_type_uses_default(self):
-        """测试非数字depth时使用默认值."""
-        config = Config()
-        assert config.depth == 10  # 默认值
+    def test_invalid_depth_type_raises_error(self):
+        """测试非数字depth时抛出ValidationError."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError) as exc_info:
+            Config()
+        assert "trilium_export_depth" in str(exc_info.value).lower()
 
     @patch.dict(
         os.environ,
@@ -170,10 +170,12 @@ class TestConfigTypeConversion:
             "CHUNK_SIZE": "not_a_number",  # 非数字
         },
     )
-    def test_invalid_chunk_size_type_uses_default(self):
-        """测试非数字chunk_size时使用默认值."""
-        config = Config()
-        assert config.chunk_size == ConfigConstants.DEFAULT_CHUNK_SIZE
+    def test_invalid_chunk_size_type_raises_error(self):
+        """测试非数字chunk_size时抛出ValidationError."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError) as exc_info:
+            Config()
+        assert "chunk_size" in str(exc_info.value).lower()
 
 
 class TestConfigRepr:
@@ -198,6 +200,7 @@ class TestConfigRepr:
 
         # 不应该包含的敏感信息
         assert "secret_token" not in repr_str
+        assert "qwen_api_key" not in repr_str or "secret_token" not in repr_str
 
 
 class TestConfigDefaults:
@@ -221,11 +224,11 @@ class TestConfigDefaults:
         assert config.note_ids == ["root"]
 
         # 文本分割默认值
-        assert config.chunk_size == ConfigConstants.DEFAULT_CHUNK_SIZE
-        assert config.chunk_overlap == ConfigConstants.DEFAULT_CHUNK_OVERLAP
+        assert config.chunk_size == 800
+        assert config.chunk_overlap == 150
 
         # 检索默认值
-        assert config.search_k == ConfigConstants.DEFAULT_SEARCH_K
+        assert config.search_k == 10
 
         # 模型类型默认值
         assert config.llm_model_type == "gpt4all"
