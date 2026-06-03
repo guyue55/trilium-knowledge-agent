@@ -1,94 +1,304 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trilium Knowledge Agent</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <title>Trilium Knowledge Agent - Gemini Web Style</title>
+    <!-- 引入高质感现代 Google 字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- 引入代码高亮及 Markdown 相关 CDN 依赖 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css" id="hl-theme">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 </head>
 <body>
+    <!-- 极光背景装饰网 -->
+    <div class="aurora-bg">
+        <div class="blur-blob blob-1"></div>
+        <div class="blur-blob blob-2"></div>
+        <div class="blur-blob blob-3"></div>
+    </div>
+    
+    <!-- 移动端侧边栏滑出磨砂半透明遮罩层 -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     <div class="app-container">
-        <!-- Sidebar -->
+        <!-- 侧边栏 Sidebar -->
         <aside class="sidebar">
+            <!-- 头部 Logo -->
             <div class="sidebar-header">
                 <div class="logo">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    <svg class="spark-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L14.8 9.2L22 12L14.8 14.8L12 22L9.2 14.8L2 12L9.2 9.2L12 2Z" fill="url(#sparkGradient)"/>
+                        <defs>
+                            <linearGradient id="sparkGradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#8ab4f8"/>
+                                <stop offset="50%" stop-color="#c58af9"/>
+                                <stop offset="100%" stop-color="#f07ce3"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
                     <h1>Trilium Agent</h1>
                 </div>
+                <!-- 移动端专属侧边栏折叠关闭按钮 -->
+                <button id="btn-sidebar-close" class="sidebar-close-btn" title="收起侧边栏">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
-            
-            <div class="sidebar-content">
-                <div class="config-group">
-                    <label>Auth Token</label>
-                    <input type="password" id="api-key-input" placeholder="输入 X-API-Key" class="glass-input">
+
+            <!-- 新建会话置顶按钮 -->
+            <div class="sidebar-action-main">
+                <button id="btn-new-chat" class="new-chat-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>新建会话</span>
+                </button>
+            </div>
+
+            <!-- 会话历史滚动区 -->
+            <div class="sidebar-history-container">
+                <div class="section-title">最近会话</div>
+                <div id="session-history-list" class="history-list">
+                    <!-- 动态注入会话条目 -->
+                    <div class="history-placeholder">暂无会话历史</div>
                 </div>
-                
-                <div class="status-panel">
-                    <h3>系统大盘</h3>
-                    <div class="status-item">
-                        <span>LLM状态:</span>
-                        <span id="status-llm" class="badge warning">检测中</span>
+            </div>
+
+            <!-- 侧边栏底部操作区 -->
+            <div class="sidebar-footer">
+                <!-- 鉴权凭证 -->
+                <div class="config-group">
+                    <div class="input-header">
+                        <label for="api-key-input">Auth Token</label>
                     </div>
-                    <div class="status-item">
-                        <span>向量库:</span>
-                        <span id="status-vector" class="badge warning">检测中</span>
-                    </div>
-                    <div class="status-item">
-                        <span>重排器:</span>
-                        <span id="status-reranker" class="badge warning">检测中</span>
+                    <div class="input-with-icon">
+                        <input type="password" id="api-key-input" placeholder="输入 X-API-Key" class="glass-input">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="key-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                     </div>
                 </div>
 
-                <div class="action-group">
-                    <button id="btn-sync" class="glass-btn primary">
+                <!-- 系统状态监测小盘 -->
+                <div class="mini-status-panel">
+                    <div class="status-indicator">
+                        <span class="dot-indicator green" id="status-llm-dot"></span>
+                        <span class="status-text">LLM: <strong id="status-llm">监测中</strong></span>
+                    </div>
+                    <div class="status-indicator">
+                        <span class="dot-indicator green" id="status-vector-dot"></span>
+                        <span class="status-text">DB: <strong id="status-vector">监测中</strong></span>
+                    </div>
+                </div>
+
+                <!-- 底部大功能按钮组 -->
+                <div class="footer-buttons">
+                    <button id="btn-sync" class="footer-btn" title="同步 Trilium 笔记到本地向量库">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-8.31l-5.67-1.25"/></svg>
-                        同步知识库
+                        <span>同步数据</span>
                     </button>
-                    <button id="btn-clear" class="glass-btn danger">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        清空上下文
+                    <button id="btn-settings-open" class="footer-btn" title="系统高级热设置">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span>控制台</span>
                     </button>
                 </div>
             </div>
         </aside>
 
-        <!-- Main Chat Area -->
+        <!-- 主聊天屏 Main Chat Container -->
         <main class="chat-container">
-            <header class="chat-header">
-                <h2>智能问答</h2>
-                <div class="session-id">Session: <span id="session-display">生成中...</span></div>
-            </header>
-            
-            <div class="chat-history" id="chat-history">
-                <!-- Messages will be injected here -->
-                <div class="message system">
-                    <div class="avatar">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+            <!-- 头部操作与主题切换 -->
+            <header class="chat-header glass-header">
+                <!-- 移动端汉堡切换按钮 -->
+                <button id="btn-sidebar-toggle" class="sidebar-toggle-btn" title="展开侧边栏">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+                <div class="header-left">
+                    <h2 id="chat-title">知识库智能问答</h2>
+                    <div class="session-display-wrapper">
+                        <span class="session-label">ID:</span>
+                        <span id="session-display">初始化中...</span>
                     </div>
-                    <div class="content">
-                        你好！我是 Trilium 知识库助手。我已经准备好回答关于您的笔记的任何问题了。
+                </div>
+                <div class="header-right">
+                    <!-- 快捷操作：清空当前上下文 -->
+                    <button id="btn-clear-current" class="icon-btn-action" title="清空当前上下文历史">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                    <!-- 日夜主题切换 -->
+                    <button id="btn-theme-toggle" class="icon-btn-action" title="切换白日/极夜主题">
+                        <!-- 默认显示太阳（当前为黑夜模式，点击切白日） -->
+                        <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                        <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 消息气泡区 -->
+            <div class="chat-history" id="chat-history">
+                <!-- 系统问候默认气泡 -->
+                <div class="message system">
+                    <div class="avatar-wrapper spark-glow">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L14.8 9.2L22 12L14.8 14.8L12 22L9.2 14.8L2 12L9.2 9.2L12 2Z" fill="currentColor"/></svg>
+                    </div>
+                    <div class="message-bubble-wrapper">
+                        <div class="sender-name">Trilium Copilot</div>
+                        <div class="content">
+                            你好！我是 <strong>Trilium 极客知识库小助手</strong>。
+                            我已经基于前置智能意图检测、BGE 深度重排和多轮会话就绪。
+                            有什么想问我的笔记内容吗？
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <!-- 输入屏障 -->
             <div class="chat-input-area">
                 <div class="input-wrapper glass-panel">
-                    <textarea id="chat-input" placeholder="向知识库提问 (Shift + Enter 换行)..." rows="1"></textarea>
-                    <button id="btn-send" class="send-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    <textarea id="chat-input" placeholder="输入您的问题，让 AI 深度解析您的笔记 (Enter 发送，Shift + Enter 换行)..." rows="1"></textarea>
+                    <button id="btn-send" class="send-btn" title="发送问题">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
+                <div class="input-footer-tip">按 Enter 发送 / 本助手已接入前置闲聊安全分流机制</div>
             </div>
         </main>
-        
-        <!-- Toast Notification -->
-        <div id="toast-container" class="toast-container"></div>
     </div>
+
+    <!-- 毛玻璃高级设置抽屉 Settings Drawer (Glass Drawer) -->
+    <div id="settings-drawer" class="settings-drawer-overlay">
+        <div class="settings-drawer-content glass-drawer">
+            <div class="drawer-header">
+                <h3>高级配置控制台</h3>
+                <button id="btn-settings-close" class="close-icon-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            
+            <form id="settings-form" class="drawer-body">
+                <!-- 模型类型选择 -->
+                <div class="form-item">
+                    <label>大模型驱动类型 (LLM_MODEL_TYPE)</label>
+                    <select id="cfg-llm-type" class="glass-select">
+                        <option value="ollama">Ollama (本地私有化)</option>
+                        <option value="deepseek">DeepSeek (深度求索极速 API)</option>
+                        <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
+                        <option value="openai">OpenAI / 兼容第三方大模型</option>
+                        <option value="qwen">阿里通义千问 (Qwen API)</option>
+                        <option value="gpt4all">GPT4All (全本地离线)</option>
+                    </select>
+                </div>
+
+                <!-- 模型标识 / 物理路径 -->
+                <div class="form-item">
+                    <label>模型标识 / 物理路径 (LLM_MODEL_PATH)</label>
+                    <input type="text" id="cfg-llm-path" class="glass-input-field" placeholder="例如: qwen2:7b, gpt-3.5-turbo 等">
+                </div>
+
+                <!-- API Base 配置 -->
+                <div class="form-item">
+                    <label>接口代理 Base 地址 (API_BASE)</label>
+                    <input type="text" id="cfg-api-base" class="glass-input-field" placeholder="默认官方地址，如: https://api.openai.com/v1">
+                </div>
+
+                <!-- Trilium Base URL 配置 -->
+                <div class="form-item">
+                    <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
+                    <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
+                </div>
+
+                <!-- 各模型密钥，按需填写 -->
+                <div class="form-section-title">安全密钥 (API Keys)</div>
+                
+                <div class="form-item">
+                    <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
+                    <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                </div>
+
+                <div class="form-item">
+                    <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
+                    <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                </div>
+
+                <div class="form-item">
+                    <label>Gemini 密钥 (GEMINI_API_KEY)</label>
+                    <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                </div>
+
+                <!-- RAG 参数配置 -->
+                <div class="form-section-title">算法参数 (RAG Pipeline Settings)</div>
+
+                <div class="form-item flex-row">
+                    <label for="cfg-use-reranker">启用 BGE 语义交叉重排器 (Reranker)</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="cfg-use-reranker">
+                        <label for="cfg-use-reranker"></label>
+                    </div>
+                </div>
+
+                <div class="form-item">
+                    <div class="slider-header">
+                        <label>BGE 重排分值相关阈值 (RERANKER_THRESHOLD)</label>
+                        <span id="val-reranker-threshold" class="slider-val">0.00</span>
+                    </div>
+                    <input type="range" id="cfg-reranker-threshold" min="0.0" max="1.0" step="0.05" class="glass-slider">
+                </div>
+
+                <div class="form-item">
+                    <div class="slider-header">
+                        <label>向量检索召回文档数 K (SEARCH_K)</label>
+                        <span id="val-search-k" class="slider-val">10</span>
+                    </div>
+                    <input type="range" id="cfg-search-k" min="1" max="20" step="1" class="glass-slider">
+                </div>
+
+                <!-- 抽屉保存按钮 -->
+                <div class="drawer-footer">
+                    <button type="button" id="btn-settings-cancel" class="glass-btn-sub">取消</button>
+                    <button type="button" id="btn-settings-save" class="glass-btn-main glow-btn">
+                        <span class="btn-text">保存热应用</span>
+                        <span class="spinner" style="display: none;"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 毛玻璃召回切片原文查阅弹窗 Source Document Preview Modal (Glass Modal) -->
+    <div id="preview-modal" class="modal-overlay">
+        <div class="modal-content glass-modal animate-pop">
+            <div class="modal-header">
+                <div class="header-breadcrumb">
+                    <span class="breadcrumb-root">Trilium Notes</span>
+                    <span class="breadcrumb-separator">&gt;</span>
+                    <span id="preview-path" class="breadcrumb-leaf">物理文档路径</span>
+                </div>
+                <button id="btn-modal-close" class="close-icon-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-meta-info">
+                <span class="meta-tag blue">树状切片</span>
+                <span class="meta-tag purple">相关性 score: <strong id="preview-score">0.95</strong></span>
+                <span class="meta-tag gray">ID: <strong id="preview-note-id">note_id</strong></span>
+            </div>
+            <div class="modal-body markdown-body" id="preview-body">
+                <!-- Marked 编译渲染后的 Markdown 切片原文 -->
+            </div>
+            <div class="modal-footer">
+                <a id="btn-modal-jump" href="#" target="_blank" class="glass-btn-jump" style="display: none; text-decoration: none; align-items: center; justify-content: center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align: middle; margin-right: 6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    <span>在 Trilium 中打开</span>
+                </a>
+                <button type="button" id="btn-modal-close-footer" class="glass-btn-sub">已阅闭环</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 弹窗容器 -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="/assets/script.js"></script>
 </body>

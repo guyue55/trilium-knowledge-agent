@@ -108,8 +108,15 @@ app.add_middleware(
 # 包含 API V1 路由
 app.include_router(api_router, prefix="/api/v1")
 
-# 挂载前端静态页面资源 (防卫式高鲁棒设计，2026最佳实践)
-frontend_dir = Path(__file__).parent.parent.parent / "frontend" / "public"
+# 挂载前端静态页面资源 (防卫式自适应双端感知设计，宿主机与容器全兼容)
+container_frontend_dir = Path("/frontend/public")
+local_frontend_dir = Path(__file__).parent.parent.parent / "frontend" / "public"
+
+if container_frontend_dir.exists():
+    frontend_dir = container_frontend_dir
+    logger.info(f"🚀 成功在容器内检测并挂载外部前端静态资源: {frontend_dir}")
+else:
+    frontend_dir = local_frontend_dir
 
 if not frontend_dir.exists():
     logger.warning(f"⚠️ 前端静态目录未检测到: {frontend_dir}，正在动态建立引导兜底桩...")
@@ -164,6 +171,7 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "components": {"llm": "unknown", "vector_db": "unknown", "reranker": "unknown"},
+        "trilium_base_url": container.config.trilium_base_url,
         "errors": container.init_errors
     }
 

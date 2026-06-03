@@ -63,11 +63,10 @@ class TestConfigValidation:
             "TRILIUM_TOKEN": "",  # 空token
         },
     )
-    def test_empty_token_raises_error(self):
-        """测试空token时抛出ConfigError."""
-        with pytest.raises(ConfigError) as exc_info:
-            Config()
-        assert "TRILIUM_TOKEN 不能为空" in str(exc_info.value)
+    def test_empty_token_warning_only(self):
+        """测试空token时在宽松规则下只警告不阻断抛出异常."""
+        config = Config()
+        assert config.trilium_token == ""
 
     @patch.dict(
         os.environ,

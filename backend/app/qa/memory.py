@@ -21,6 +21,18 @@ class SessionManager:
         self.max_history = max_history
         self._lock = asyncio.Lock()
 
+    async def get_all_sessions(self) -> Dict[str, str]:
+        """获取所有已记录的会话ID以及它们的第一句人类提问（作为标题）."""
+        async with self._lock:
+            result = {}
+            for sid, msgs in self.sessions.items():
+                first_msg = msgs[0].content if msgs else "空会话"
+                # 截取前 15 个字符作为展示标题
+                title = first_msg[:15] + "..." if len(first_msg) > 15 else first_msg
+                result[sid] = title
+            return result
+
+
     async def get_history(self, session_id: str) -> List[ChatMessage]:
         """获取指定会话的历史记录."""
         async with self._lock:

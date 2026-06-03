@@ -31,7 +31,7 @@ fi
 # ==============================================================================
 # 启动模式 1：一键容器化生产级部署 (Docker Compose Mode)
 # ==============================================================================
-if [ "$1" == "docker" ]; then
+if [ "$1" == "docker" ] || [ "$1" == "docker-backend" ]; then
     echo -e "${BLUE}[1/7] 正在检查 Docker 宿主机环境...${NC}"
     if ! command -v docker &>/dev/null; then
         echo -e "${RED}❌ 致命错误：本机未检测到 Docker 安装，请先安装 Docker Desktop！${NC}"
@@ -50,35 +50,41 @@ if [ "$1" == "docker" ]; then
         echo -e "${GREEN}✅ 已自动生成默认配置。${NC}"
     fi
 
-    # 2. 启动 Ollama 服务容器
-    echo -e "\n${BLUE}[2/7] 正在启动 Ollama 本地模型容器...${NC}"
-    $DOCKER_COMPOSE_CMD up -d ollama
-    
-    # 3. 轮询监控探测 Ollama 在线心跳
-    echo -e "\n${BLUE}[3/7] 正在极速轮询检测 Ollama 连通度...${NC}"
-    retries=0
-    max_retries=15
-    ollama_ready=0
-    while [ $retries -lt $max_retries ]; do
-        if curl -s -o /dev/null -w "%{http_code}" http://localhost:11434 | grep -E "200|404" &>/dev/null; then
-            ollama_ready=1
-            break
-        fi
-        echo -e "   ⏳ Ollama 正在初始化，等待端口 11434 就绪... ($((retries+1))/$max_retries)"
-        sleep 1
-        retries=$((retries+1))
-    done
+    # 2. 选择性启动 Ollama 服务容器
+    if [ "$1" == "docker" ]; then
+        echo -e "\n${BLUE}[2/7] 正在启动 Ollama 本地模型容器...${NC}"
+        $DOCKER_COMPOSE_CMD --profile ollama up -d ollama
+        
+        # 3. 轮询监控探测 Ollama 在线心跳
+        echo -e "\n${BLUE}[3/7] 正在极速轮询检测 Ollama 连通度...${NC}"
+        retries=0
+        max_retries=15
+        ollama_ready=0
+        while [ $retries -lt $max_retries ]; do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:11434 | grep -E "200|404" &>/dev/null; then
+                ollama_ready=1
+                break
+            fi
+            echo -e "   ⏳ Ollama 正在初始化，等待端口 11434 就绪... ($((retries+1))/$max_retries)"
+            sleep 1
+            retries=$((retries+1))
+        done
 
-    if [ $ollama_ready -ne 1 ]; then
-        echo -e "${RED}⚠️  警告：无法连通宿主机 Ollama 端口，我们将继续，但可能会影响后续的模型拉取。${NC}"
+        if [ $ollama_ready -ne 1 ]; then
+            echo -e "${RED}⚠️  警告：无法连通宿主机 Ollama 端口，我们将继续，但可能会影响后续的模型拉取。${NC}"
+        else
+            echo -e "${GREEN}✅ Ollama 本地容器端口就绪！${NC}"
+        fi
+
+        # 4. 容器内全自动下载高性能中文大模型 (qwen2.5:1.5b)
+        echo -e "\n${BLUE}[4/7] 正在从官方镜像拉取高性能中文 RAG 推荐模型 [qwen2.5:1.5b]...${NC}"
+        echo -e "      (此模型体积仅 900MB，首Token生成极快，语义深层理解优秀，生产离线部署首选)"
+        docker exec ollama ollama pull qwen2.5:1.5b
     else
-        echo -e "${GREEN}✅ Ollama 本地容器端口就绪！${NC}"
+        echo -e "\n${YELLOW}⚠️  检测为 docker-backend 模式，跳过本地 Ollama 容器拉起。${NC}"
+        echo -e "   您可在前端页面中自由热配置您的外部大模型（如 OpenAI、DeepSeek、Gemini 及已有外部 Ollama API）。"
     fi
 
-    # 4. 容器内全自动下载高性能中文大模型 (qwen2.5:1.5b)
-    echo -e "\n${BLUE}[4/7] 正在从官方镜像拉取高性能中文 RAG 推荐模型 [qwen2.5:1.5b]...${NC}"
-    echo -e "      (此模型体积仅 900MB，首Token生成极快，语义深层理解优秀，生产离线部署首选)"
-    docker exec ollama ollama pull qwen2.5:1.5b
 
     # 5. 构建并拉起统一的前后端托管 Backend FastAPI 容器
     echo -e "\n${BLUE}[5/7] 正在构建并拉起 FastAPI 整合应用容器...${NC}"

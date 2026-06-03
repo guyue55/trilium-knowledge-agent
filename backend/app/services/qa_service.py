@@ -14,6 +14,7 @@ from app.llm.base import LLMAdapter
 from app.qa.cache import CacheManager
 from app.qa.memory import SessionManager
 from app.services.retrieval_service import RetrievalService
+from app.services.intent_router import IntentRouter
 
 
 class QAService:
@@ -30,8 +31,37 @@ class QAService:
         self.retrieval_service = retrieval_service
         self.cache_manager = cache_manager
         self.session_manager = session_manager
+        self.intent_router = IntentRouter()
 
         self._llm_lock = asyncio.Lock()
+
+    def _get_chitchat_prompt_template(self) -> str:
+        return """你是一个友好、优雅、聪明的 AI 助手。
+请以亲切自然、充满科技感和温暖的语气回复用户的日常闲聊、问候或简单互动。
+要求：
+1. 必须使用中文回答。
+2. 保持回答得体、简洁、幽默且专业，展现出 Google 风格的高级质感。
+3. 必须将你的最终答案包裹在 <answer> 和 </answer> 标签之间！！！
+
+对话历史：
+{chat_history}
+
+用户问题：{question}
+"""
+
+    def _get_general_prompt_template(self) -> str:
+        return """你是一个友好、优雅、聪明的 AI 助手。
+由于用户的提问超出了你当前专属知识库的覆盖范围，请基于你的通用知识为用户提供高水平的解答。
+要求：
+1. 必须使用中文回答。
+2. 展现出你渊博的知识，保持得体、专业且充满 Google 风格的高级质感。
+3. 必须将你的最终答案包裹在 <answer> 和 </answer> 标签之间！！！
+
+对话历史：
+{chat_history}
+
+用户问题：{question}
+"""
 
     def _get_prompt_template(self) -> str:
         return """你是一个专门解答基于知识库内容问题的智能助手。
@@ -99,11 +129,27 @@ class QAService:
                 return cached_result
 
         try:
-            # 1. 委托检索服务
-            filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
+            # 1. 前置意图识别
+            intent = self.intent_router.classify(question)
+            
+            if intent == "CHITCHAT":
+                filtered_docs = []
+                raw_docs = []
+                context_str = "无"
+                prompt_template = self._get_chitchat_prompt_template()
+            else:
+                # 委托检索服务
+                filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
+                if not filtered_docs:
+                    logger.info(f"QAService: 检索重排后没有满足阈值的核心切片，自动切换至 [GENERAL_CHAT] 通用自由对话模式。")
+                    intent = "GENERAL_CHAT"
+                    context_str = "无"
+                    prompt_template = self._get_general_prompt_template()
+                else:
+                    context_str = self._format_context(filtered_docs)
+                    prompt_template = self._get_prompt_template()
 
             # 2. 构建上下文与历史
-            context_str = self._format_context(filtered_docs)
             if self.session_manager:
                 history = await self.session_manager.get_history(session_id)
                 history_str = self._format_history(history)
@@ -111,12 +157,17 @@ class QAService:
                 history_str = "无"
 
             # 3. 生成 Prompt
-            prompt_template = self._get_prompt_template()
-            prompt_value = prompt_template.format(
-                context=context_str,
-                chat_history=history_str,
-                question=question
-            )
+            if intent in ("CHITCHAT", "GENERAL_CHAT"):
+                prompt_value = prompt_template.format(
+                    chat_history=history_str,
+                    question=question
+                )
+            else:
+                prompt_value = prompt_template.format(
+                    context=context_str,
+                    chat_history=history_str,
+                    question=question
+                )
 
             # 4. LLM 推理
             async with self._llm_lock:
@@ -175,26 +226,43 @@ class QAService:
                 return
 
         try:
-            # 1. 委托检索服务
-            filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
+            # 1. 前置意图识别
+            intent = self.intent_router.classify(question)
             
-            sources = []
-            for doc in filtered_docs:
-                for raw_doc, score in raw_docs:
-                    if raw_doc == doc:
-                        sources.append({
-                            "title": doc.metadata.get("title", "未知"),
-                            "note_id": doc.metadata.get("note_id", ""),
-                            "content": doc.page_content,
-                            "score": score,
-                            "path": doc.metadata.get("path", "")
-                        })
-                        break
+            if intent == "CHITCHAT":
+                filtered_docs = []
+                raw_docs = []
+                sources = []
+                context_str = "无"
+                prompt_template = self._get_chitchat_prompt_template()
+            else:
+                # 委托检索服务
+                filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
+                if not filtered_docs:
+                    logger.info(f"QAService: 流式检索重排后没有满足阈值的核心切片，自动切换至 [GENERAL_CHAT] 通用自由对话模式。")
+                    intent = "GENERAL_CHAT"
+                    sources = []
+                    context_str = "无"
+                    prompt_template = self._get_general_prompt_template()
+                else:
+                    sources = []
+                    for doc in filtered_docs:
+                        for raw_doc, score in raw_docs:
+                            if raw_doc == doc:
+                                sources.append({
+                                    "title": doc.metadata.get("title", "未知"),
+                                    "note_id": doc.metadata.get("note_id", ""),
+                                    "content": doc.page_content,
+                                    "score": score,
+                                    "path": doc.metadata.get("path", "")
+                                })
+                                break
+                    context_str = self._format_context(filtered_docs)
+                    prompt_template = self._get_prompt_template()
             
             yield {"type": "sources", "data": sources}
 
             # 2. 构建上下文与历史
-            context_str = self._format_context(filtered_docs)
             if self.session_manager:
                 history = await self.session_manager.get_history(session_id)
                 history_str = self._format_history(history)
@@ -202,19 +270,26 @@ class QAService:
                 history_str = "无"
 
             # 3. 生成 Prompt
-            prompt_template = self._get_prompt_template()
-            prompt_value = prompt_template.format(
-                context=context_str,
-                chat_history=history_str,
-                question=question
-            )
+            if intent in ("CHITCHAT", "GENERAL_CHAT"):
+                prompt_value = prompt_template.format(
+                    chat_history=history_str,
+                    question=question
+                )
+            else:
+                prompt_value = prompt_template.format(
+                    context=context_str,
+                    chat_history=history_str,
+                    question=question
+                )
 
             # 4. LLM 推理 (流式)
             full_answer = ""
             async with self._llm_lock:
                 async for chunk in self.llm_adapter.agenerate_stream(prompt_value):
                     full_answer += chunk
-                    yield {"type": "chunk", "data": chunk}
+                    clean_chunk = chunk.replace("<answer>", "").replace("</answer>", "").replace("<ANSWER>", "").replace("</ANSWER>", "")
+                    if clean_chunk:
+                        yield {"type": "chunk", "data": clean_chunk}
 
             # 5. 清理答案并记录历史
             final_answer = self._clean_answer(full_answer)

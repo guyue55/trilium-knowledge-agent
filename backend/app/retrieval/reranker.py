@@ -69,11 +69,6 @@ class Reranker:
                 if score >= self.config.reranker_threshold:
                     filtered_docs.append(doc)
                     
-            if not filtered_docs:
-                logger.warning(f"重排后所有文档低于阈值 ({self.config.reranker_threshold})，优雅放行 Top 1")
-                if paired_docs:
-                    filtered_docs.append(paired_docs[0][0])
-                    
             # 最终截断到 search_k
             return filtered_docs[:self.config.search_k]
             

@@ -4,6 +4,8 @@ services:
   ollama:
     image: docker.m.daocloud.io/ollama/ollama:latest
     container_name: ollama
+    profiles:
+      - ollama
     ports:
       - "11434:11434"
     volumes:
@@ -28,6 +30,5 @@ services:
       - LLM_MODEL_PATH=qwen2.5:1.5b
       - OPENAI_API_BASE=http://ollama:11434
       - HF_ENDPOINT=https://hf-mirror.com
-    depends_on:
-      - ollama
     restart: unless-stopped
+
