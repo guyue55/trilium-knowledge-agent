@@ -293,11 +293,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (theme === "dark") {
             sunIcon.style.display = "block";
             moonIcon.style.display = "none";
-            if (hlStyle) hlStyle.href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css";
+            if (hlStyle) hlStyle.href = "/assets/libs/github-dark-dimmed.min.css";
         } else {
             sunIcon.style.display = "none";
             moonIcon.style.display = "block";
-            if (hlStyle) hlStyle.href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css";
+            if (hlStyle) hlStyle.href = "/assets/libs/github.min.css";
         }
     }
 
