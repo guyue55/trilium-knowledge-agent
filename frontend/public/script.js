@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 凭证变动本地自动保存
     apiKeyInput.addEventListener("input", () => {
-        localStorage.setItem("trilium_agent_api_key", apiKeyInput.value.strip());
+        localStorage.setItem("trilium_agent_api_key", apiKeyInput.value.trim());
     });
 
     // 触发知识库同步
