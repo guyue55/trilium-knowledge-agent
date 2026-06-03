@@ -2,15 +2,11 @@
 """大语言模型（LLM）适配器基类定义."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, AsyncGenerator
 
 
 class LLMAdapter(ABC):
-    """LLM 统一适配器接口.
-    
-    采用适配器模式隔离底层不同的 LLM 实现（如 GPT4All, OpenAI, Qwen 等），
-    向上层提供统一的接口。
-    """
+    """LLM 统一适配器接口."""
 
     @abstractmethod
     def initialize(self) -> bool:
@@ -22,17 +18,8 @@ class LLMAdapter(ABC):
         pass
 
     @abstractmethod
-    def get_langchain_llm(self) -> Any:
-        """获取用于 LangChain 的底层模型实例.
-        
-        Returns:
-            Any: LangChain 兼容的 LLM 对象
-        """
-        pass
-
-    @abstractmethod
     def generate(self, prompt: str) -> str:
-        """直接生成文本内容（同步方法，适用于简单测试）.
+        """直接生成文本内容（同步方法）.
         
         Args:
             prompt: 输入的提示词
@@ -43,7 +30,7 @@ class LLMAdapter(ABC):
         pass
 
     @abstractmethod
-    async def agenerate_stream(self, prompt: str) -> Any:
+    async def agenerate_stream(self, prompt: str) -> AsyncGenerator[str, None]:
         """异步生成文本流.
         
         Args:

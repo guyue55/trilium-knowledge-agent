@@ -1,87 +1,91 @@
 # -*- coding: utf-8 -*-
-"""向量库存储与搜索适配器."""
+"""向量库与混合检索适配器 (LanceDB)."""
 
+import os
 import threading
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
-
+from typing import Any, List, Tuple, Dict
 from loguru import logger
+import lancedb
+from lancedb.pydantic import Vector, LanceModel
 
 from app.core.config import Config
+from app.retrieval.document import Document
+from app.retrieval.embeddings import EmbeddingAdapter
 
+class VectorStoreAdapter:
+    """LanceDB 适配器实现 (原生支持混合检索 Hybrid Search)."""
 
-class VectorStoreAdapter(ABC):
-    """向量数据库接口基类."""
-
-    @abstractmethod
-    def initialize(self) -> bool:
-        pass
-
-    @abstractmethod
-    def clear(self) -> None:
-        pass
-
-    @abstractmethod
-    def add_documents(self, documents: List[Any]) -> None:
-        pass
-
-    @abstractmethod
-    def similarity_search_with_scores(self, query: str, k: int = 5, score_threshold: float = 0.0) -> List[tuple[Any, float]]:
-        pass
-
-    @abstractmethod
-    def get_retriever(self, search_kwargs: Dict[str, Any]) -> Any:
-        pass
-
-
-class ChromaAdapter(VectorStoreAdapter):
-    """ChromaDB 适配器实现."""
-
-    def __init__(self, config: Config, embedding_model: Any):
+    def __init__(self, config: Config, embedding_adapter: EmbeddingAdapter):
         self.config = config
-        self.embedding_model = embedding_model
-        self.vector_store = None
+        self.embedding_adapter = embedding_adapter
+        self.db = None
+        self.table = None
+        self.table_name = "trilium_notes"
         self._db_lock = threading.Lock()
+        # Ensure the vector db directory exists
+        os.makedirs(self.config.vector_db_dir, exist_ok=True)
 
     def initialize(self) -> bool:
-        if not self.embedding_model:
-            logger.error("Embedding 模型为空，Chroma 无法初始化")
+        if not self.embedding_adapter or not self.embedding_adapter.get_model():
+            logger.error("Embedding 模型为空，LanceDB 无法初始化")
             return False
             
         try:
-            from langchain_community.vectorstores import Chroma
+            # 初始化 LanceDB 连接
+            self.db = lancedb.connect(self.config.vector_db_dir)
+            
+            # 使用 Dummy 测试获取维度大小
+            dummy_vec = self.embedding_adapter.embed_query("test")
+            dim = len(dummy_vec) if dummy_vec else 384
+            
+            # 使用动态生成 Schema (适配不同的 metadata 和维度)
+            from pyarrow import schema, string, float32, list_
+            self.schema = schema([
+                ("id", string()),
+                ("vector", list_(float32(), dim)),
+                ("text", string()),
+                ("note_id", string()),
+                ("title", string()),
+                ("source", string()),
+                ("path", string()),
+            ])
 
-            self.vector_store = Chroma(
-                embedding_function=self.embedding_model,
-                persist_directory=self.config.vector_db_dir,
-            )
-            logger.info("ChromaDB 初始化成功")
+            if self.table_name in self.db.table_names():
+                self.table = self.db.open_table(self.table_name)
+                logger.info(f"LanceDB 加载已有表 [{self.table_name}] 成功")
+            else:
+                # 创建新表
+                self.table = self.db.create_table(self.table_name, schema=self.schema)
+                logger.info(f"LanceDB 创建新表 [{self.table_name}] 成功，维度: {dim}")
+                
+            # 预热 jieba 中文分词模型，避免用户第一条请求因延迟加载而产生 2s+ 的拖拉卡顿
+            try:
+                import jieba
+                jieba.initialize()
+                logger.info("Jieba 中文分词模型预载热启动完成")
+            except Exception as jieba_pre_e:
+                logger.warning(f"预载 Jieba 分词出错 (可安全忽略): {jieba_pre_e}")
+                
             return True
         except Exception as e:
-            logger.error(f"ChromaDB 初始化失败: {e}")
+            logger.error(f"LanceDB 初始化失败: {e}")
             return False
 
     def clear(self) -> None:
-        if not self.vector_store:
+        if not self.db:
             return
         try:
-            logger.info("正在清空向量数据库...")
+            logger.info("正在清空 LanceDB 数据库...")
             with self._db_lock:
-                self.vector_store.delete_collection()
-                from langchain_community.vectorstores import Chroma
-
-                self.vector_store = Chroma(
-                    embedding_function=self.embedding_model,
-                    persist_directory=self.config.vector_db_dir,
-                )
-                if hasattr(self.vector_store, "persist"):
-                    self.vector_store.persist()
-            logger.info("向量数据库清空完毕")
+                if self.table_name in self.db.table_names():
+                    self.db.drop_table(self.table_name)
+                self.table = self.db.create_table(self.table_name, schema=self.schema)
+            logger.info("LanceDB 数据库清空完毕")
         except Exception as e:
-            logger.error(f"清空向量库时出错: {e}")
+            logger.error(f"清空 LanceDB 时出错: {e}")
 
-    def add_documents(self, documents: List[Any]) -> None:
-        if not self.vector_store or not documents:
+    def add_documents(self, documents: List[Document]) -> None:
+        if self.table is None or not documents:
             return
 
         total_docs = len(documents)
@@ -93,29 +97,138 @@ class ChromaAdapter(VectorStoreAdapter):
                 current_batch = i // batch_size + 1
                 total_batches = (total_docs + batch_size - 1) // batch_size
                 
-                logger.info(f"添加文档批次 {current_batch}/{total_batches} (进度: {min(i + batch_size, total_docs)}/{total_docs})...")
-                with self._db_lock:
-                    self.vector_store.add_documents(batch)
+                logger.info(f"添加文档批次 {current_batch}/{total_batches}...")
+                
+                texts = [doc.page_content for doc in batch]
+                vectors = self.embedding_adapter.embed_documents(texts)
+                
+                data = []
+                for j, doc in enumerate(batch):
+                    if j >= len(vectors):
+                        continue
+                        
+                    meta = doc.metadata or {}
+                    # 构建 LanceDB 记录
+                    record = {
+                        "id": f"{meta.get('note_id', 'unknown')}_{meta.get('chunk_index', j)}_{i+j}",
+                        "vector": vectors[j],
+                        "text": doc.page_content,
+                        "note_id": meta.get("note_id", ""),
+                        "title": meta.get("title", ""),
+                        "source": meta.get("source", ""),
+                        "path": meta.get("path", "")
+                    }
+                    data.append(record)
                     
-                    if hasattr(self.vector_store, "persist"):
-                        if current_batch == total_batches or current_batch % self.config.vector_db_persist_interval == 0:
-                            self.vector_store.persist()
-        except Exception as e:
-            logger.error(f"添加文档到 ChromaDB 失败: {e}")
-
-    def similarity_search_with_scores(self, query: str, k: int = 5, score_threshold: float = 0.0) -> List[tuple[Any, float]]:
-        if not self.vector_store:
-            return []
-        try:
+                if data:
+                    with self._db_lock:
+                        self.table.add(data)
+                        
+            # 构建全文索引以便进行 hybrid search
             with self._db_lock:
-                return self.vector_store.similarity_search_with_relevance_scores(
-                    query, k=k, score_threshold=score_threshold
-                )
+                try:
+                    self.table.create_fts_index("text", replace=True)
+                    logger.info("LanceDB 全文检索 (FTS) 索引更新成功")
+                except Exception as fts_e:
+                    logger.warning(f"LanceDB FTS 索引创建跳过 (可能因为数据量太小或已存在): {fts_e}")
+                    
         except Exception as e:
-            logger.error(f"ChromaDB 搜索失败: {e}")
-            return []
+            logger.error(f"添加文档到 LanceDB 失败: {e}")
 
-    def get_retriever(self, search_kwargs: Dict[str, Any]) -> Any:
-        if not self.vector_store:
-            return None
-        return self.vector_store.as_retriever(search_kwargs=search_kwargs)
+    def similarity_search_with_scores(self, query: str, k: int = 5, score_threshold: float = 0.0) -> List[Tuple[Document, float]]:
+        """执行黄金标准应用层 RRF 混合搜索 (纯向量语义搜索 + FTS/BM25 精准全文检索)."""
+        if self.table is None:
+            return []
+            
+        try:
+            query_vector = self.embedding_adapter.embed_query(query)
+            if not query_vector:
+                return []
+                
+            # 1. 向量路安全检索 (获取 2 * k 个候选，移除了 _db_lock 互斥，支持天然多线程高并发读)
+            vector_candidates = []
+            try:
+                vector_candidates = self.table.search(query_vector).limit(k * 2).to_list()
+            except Exception as e:
+                logger.warning(f"向量路检索失败: {e}")
+
+            # 2. 全文检索 FTS 路安全检索 (获取 2 * k 个候选，移除了 _db_lock 互斥)
+            fts_candidates = []
+            try:
+                # 对中文 Query 进行 jieba 智能分词以成倍提升 FTS 中文召回率
+                fts_query = query
+                import re
+                if re.search(r"[\u4e00-\u9fa5]", query):
+                    try:
+                        import jieba
+                        # 使用 cut_for_search (更适合搜索引擎的分词模式)
+                        words = list(jieba.cut_for_search(query))
+                        if words:
+                            fts_query = " ".join(words)
+                            logger.debug(f"FTS 中文分词增强：原 Query = '{query}' -> 分词 Query = '{fts_query}'")
+                    except Exception as jieba_e:
+                        logger.warning(f"Jieba 分词失败，回退到原始全文搜索: {jieba_e}")
+
+                # 仅当创建了 FTS 索引时可以执行。LanceDB 在空表或未建立索引时会抛异常。
+                fts_candidates = self.table.search(fts_query, query_type="fts").limit(k * 2).to_list()
+            except Exception as e:
+                # 刚启动或无数据时报错属正常情况，优雅捕获并记录 debug
+                logger.debug(f"FTS 全文路检索跳过或不可用 (可能因为数据库为空或索引未建立): {e}")
+
+            # 3. 倒数排名融合 (Reciprocal Rank Fusion)
+            # 常数 C 设为 60.0 (业界公认数学性能最均衡参数)
+            C = 60.0
+            rrf_scores = {}
+            doc_map = {}
+
+            # 融合向量候选
+            for rank, item in enumerate(vector_candidates, 1):
+                doc_id = item.get("id")
+                if doc_id:
+                    doc_map[doc_id] = item
+                    rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (C + rank))
+
+            # 融合全文候选
+            for rank, item in enumerate(fts_candidates, 1):
+                doc_id = item.get("id")
+                if doc_id:
+                    doc_map[doc_id] = item
+                    rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (C + rank))
+
+            # 若没有任何候选结果，直接返回空
+            if not rrf_scores:
+                logger.debug("混合检索无任何候选召回结果")
+                return []
+
+            # 按照 RRF 合并分降序排列，取 Top k
+            sorted_candidates = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+            logger.debug(f"RRF 双路召回融合完毕，共召回 {len(rrf_scores)} 个去重候选，取前 {len(sorted_candidates)} 个进行后续重排。")
+
+            docs_with_scores = []
+            for doc_id, rrf_val in sorted_candidates:
+                r = doc_map[doc_id]
+                
+                # 归一化综合检索相关度评分 (映射到大约 [0.1, 0.99] 的直观浮点数，便于阈值过滤与调试展现)
+                # 两路第 1 名的最大 RRF 值大约为 2/61 = 0.0328，我们乘以 30 来映射到 1.0 的尺度上
+                score = min(0.99, max(0.01, rrf_val * 30.0))
+                
+                if score < score_threshold:
+                    continue
+                    
+                meta = {
+                    "note_id": r.get("note_id", ""),
+                    "title": r.get("title", ""),
+                    "source": r.get("source", ""),
+                    "path": r.get("path", "")
+                }
+                
+                doc = Document(page_content=r.get("text", ""), metadata=meta)
+                docs_with_scores.append((doc, score))
+                
+            return docs_with_scores
+            
+        except Exception as e:
+            logger.error(f"RRF 混合搜索执行失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []

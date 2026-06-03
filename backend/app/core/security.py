@@ -38,6 +38,8 @@ def mask_sensitive_data(record):
         "API_KEY",
         "OPENAI_API_KEY",
         "QWEN_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GEMINI_API_KEY",
         "API_AUTH_KEY",
     ]
 

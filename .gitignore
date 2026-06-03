@@ -215,7 +215,6 @@ __marimo__/
 .trilium_attachment/
 
 # Data
-data/model/*
-data/trilium/*
-data/vector_db/*
-data/models/
+data/
+backend/data/
+

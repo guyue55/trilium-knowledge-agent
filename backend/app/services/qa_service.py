@@ -8,7 +8,6 @@ import asyncio
 import re
 from typing import Any, Dict, List
 
-from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
 from app.llm.base import LLMAdapter
@@ -34,8 +33,8 @@ class QAService:
 
         self._llm_lock = asyncio.Lock()
 
-    def _get_prompt_template(self) -> ChatPromptTemplate:
-        template = """你是一个专门解答基于知识库内容问题的智能助手。
+    def _get_prompt_template(self) -> str:
+        return """你是一个专门解答基于知识库内容问题的智能助手。
 请根据以下检索到的参考信息和对话历史来回答用户的问题。
 要求：
 1. 必须使用中文回答。
@@ -51,7 +50,6 @@ class QAService:
 
 用户问题：{question}
 """
-        return ChatPromptTemplate.from_template(template)
 
     def _clean_answer(self, raw_answer: str) -> str:
         if not raw_answer:
@@ -76,9 +74,10 @@ class QAService:
             return "无"
         formatted = []
         for msg in history:
-            role = "User" if msg.type == "human" else "AI"
+            role = "User" if msg.role == "user" else "AI"
             formatted.append(f"{role}: {msg.content}")
         return "\n".join(formatted)
+
 
     def _format_context(self, docs: List[Any]) -> str:
         if not docs:
@@ -93,10 +92,11 @@ class QAService:
         """处理用户提问，执行完整 QA 编排."""
         logger.info(f"QAService: 收到提问 '{question}' (Session: {session_id})")
 
-        cached_result = self.cache_manager.get(question, session_id)
-        if cached_result:
-            logger.info("QAService: 命中问答缓存，直接返回")
-            return cached_result
+        if self.cache_manager:
+            cached_result = self.cache_manager.get(question, session_id)
+            if cached_result:
+                logger.info("QAService: 命中问答缓存，直接返回")
+                return cached_result
 
         try:
             # 1. 委托检索服务
@@ -104,8 +104,11 @@ class QAService:
 
             # 2. 构建上下文与历史
             context_str = self._format_context(filtered_docs)
-            history = await self.session_manager.get_history(session_id)
-            history_str = self._format_history(history)
+            if self.session_manager:
+                history = await self.session_manager.get_history(session_id)
+                history_str = self._format_history(history)
+            else:
+                history_str = "无"
 
             # 3. 生成 Prompt
             prompt_template = self._get_prompt_template()
@@ -124,7 +127,8 @@ class QAService:
 
             # 5. 清理答案并记录历史
             final_answer = self._clean_answer(raw_answer)
-            await self.session_manager.add_interaction(session_id, question, final_answer)
+            if self.session_manager:
+                await self.session_manager.add_interaction(session_id, question, final_answer)
 
             # 6. 构造返回结果
             response = {
@@ -134,14 +138,16 @@ class QAService:
                         "title": doc.metadata.get("title", "未知"),
                         "note_id": doc.metadata.get("note_id", ""),
                         "content": doc.page_content,
-                        "score": score
+                        "score": score,
+                        "path": doc.metadata.get("path", "")
                     }
                     for doc in filtered_docs
                     for raw_doc, score in raw_docs if raw_doc == doc
                 ]
             }
 
-            self.cache_manager.set(question, session_id, response)
+            if self.cache_manager:
+                self.cache_manager.set(question, session_id, response)
             return response
 
         except Exception as e:
@@ -160,12 +166,13 @@ class QAService:
         """流式处理用户提问."""
         logger.info(f"QAService: 流式收到提问 '{question}' (Session: {session_id})")
 
-        cached_result = self.cache_manager.get(question, session_id)
-        if cached_result:
-            logger.info("QAService: 流式命中问答缓存，直接返回")
-            yield {"type": "sources", "data": cached_result.get("sources", [])}
-            yield {"type": "chunk", "data": cached_result["answer"]}
-            return
+        if self.cache_manager:
+            cached_result = self.cache_manager.get(question, session_id)
+            if cached_result:
+                logger.info("QAService: 流式命中问答缓存，直接返回")
+                yield {"type": "sources", "data": cached_result.get("sources", [])}
+                yield {"type": "chunk", "data": cached_result["answer"]}
+                return
 
         try:
             # 1. 委托检索服务
@@ -179,7 +186,8 @@ class QAService:
                             "title": doc.metadata.get("title", "未知"),
                             "note_id": doc.metadata.get("note_id", ""),
                             "content": doc.page_content,
-                            "score": score
+                            "score": score,
+                            "path": doc.metadata.get("path", "")
                         })
                         break
             
@@ -187,8 +195,11 @@ class QAService:
 
             # 2. 构建上下文与历史
             context_str = self._format_context(filtered_docs)
-            history = await self.session_manager.get_history(session_id)
-            history_str = self._format_history(history)
+            if self.session_manager:
+                history = await self.session_manager.get_history(session_id)
+                history_str = self._format_history(history)
+            else:
+                history_str = "无"
 
             # 3. 生成 Prompt
             prompt_template = self._get_prompt_template()
@@ -207,13 +218,15 @@ class QAService:
 
             # 5. 清理答案并记录历史
             final_answer = self._clean_answer(full_answer)
-            await self.session_manager.add_interaction(session_id, question, final_answer)
+            if self.session_manager:
+                await self.session_manager.add_interaction(session_id, question, final_answer)
 
             # 6. 保存缓存
-            self.cache_manager.set(question, session_id, {
-                "answer": final_answer,
-                "sources": sources
-            })
+            if self.cache_manager:
+                self.cache_manager.set(question, session_id, {
+                    "answer": final_answer,
+                    "sources": sources
+                })
 
         except Exception as e:
             logger.error(f"QAService 流式处理失败: {e}")

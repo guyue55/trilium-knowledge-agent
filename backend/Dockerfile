@@ -1,11 +1,12 @@
-# 使用 Python 3.10-slim 基础镜像
-FROM python:3.10-slim
+# 使用 Python 3.10-slim 镜像 (通过高速代理镜像源拉取)
+FROM docker.m.daocloud.io/library/python:3.10-slim
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

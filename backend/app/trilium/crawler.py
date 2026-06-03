@@ -4,7 +4,7 @@
 import html
 import time
 from collections import deque
-from typing import Any, List
+from typing import Any, Dict, List
 
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -143,8 +143,83 @@ class TriliumCrawler:
 
     def _clean_html(self, raw_html: str) -> str:
         try:
+            import re
             unescaped = html.unescape(raw_html)
             soup = BeautifulSoup(unescaped, "html.parser")
-            return soup.get_text(separator="\n", strip=True)
-        except Exception:
+            
+            # 1. 递归转换特定的富文本标签为 Markdown 格式
+            # 处理标题 h1 到 h6
+            for tag in ["h1", "h2", "h3", "h4", "h5", "h6"]:
+                level = int(tag[1])
+                for el in soup.find_all(tag):
+                    title_text = el.get_text(strip=True)
+                    if title_text:
+                        el.replace_with(f"\n\n{'#' * level} {title_text}\n\n")
+                    else:
+                        el.decompose()
+
+            # 处理列表 li
+            for el in soup.find_all("li"):
+                li_text = el.get_text().strip()
+                if li_text:
+                    el.replace_with(f"\n- {li_text}\n")
+                else:
+                    el.decompose()
+
+            # 处理粗体 strong / b
+            for tag in ["strong", "b"]:
+                for el in soup.find_all(tag):
+                    bold_text = el.get_text().strip()
+                    if bold_text:
+                        el.replace_with(f" **{bold_text}** ")
+                    else:
+                        el.decompose()
+
+            # 处理斜体 em / i
+            for tag in ["em", "i"]:
+                for el in soup.find_all(tag):
+                    italic_text = el.get_text().strip()
+                    if italic_text:
+                        el.replace_with(f" *{italic_text}* ")
+                    else:
+                        el.decompose()
+
+            # 处理代码块 pre / code
+            # 优先处理 pre 中的 code (多行代码块)
+            for el in soup.find_all("pre"):
+                code_text = el.get_text().strip()
+                if code_text:
+                    el.replace_with(f"\n\n```\n{code_text}\n```\n\n")
+                else:
+                    el.decompose()
+
+            # 处理剩余的行内 code
+            for el in soup.find_all("code"):
+                code_text = el.get_text().strip()
+                if code_text:
+                    el.replace_with(f" `{code_text}` ")
+                else:
+                    el.decompose()
+
+            # 处理链接 a
+            for el in soup.find_all("a"):
+                link_text = el.get_text().strip()
+                href = el.get("href", "")
+                if link_text:
+                    if href and not href.startswith("#"):
+                        el.replace_with(f" [{link_text}]({href}) ")
+                    else:
+                        el.replace_with(f" {link_text} ")
+                else:
+                    el.decompose()
+
+            # 2. 转换为文本，并将多余的换行符规整化
+            cleaned_text = soup.get_text(separator="\n")
+            
+            # 使用正则，将连续 3 个以上的换行规整为最多 2 个换行，保持精美而紧凑的排版
+            cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)
+            return cleaned_text.strip()
+            
+        except Exception as e:
+            logger.warning(f"清洗 HTML 内容发生异常: {e}，将回退到原文本")
             return raw_html

@@ -11,7 +11,6 @@ from app.core.config import Config, get_config
 from app.llm.base import LLMAdapter
 from app.qa.cache import CacheManager
 from app.qa.memory import SessionManager
-from app.retrieval.bm25 import BM25StoreAdapter
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import VectorStoreAdapter
 
@@ -22,7 +21,6 @@ class AppContainer:
         self.config: Config = get_config()
         self.llm_adapter: Optional[LLMAdapter] = None
         self.vector_store: Optional[VectorStoreAdapter] = None
-        self.bm25_store: Optional[BM25StoreAdapter] = None
         self.reranker: Optional[Reranker] = None
         self.cache_manager: Optional[CacheManager] = None
         self.session_manager: Optional[SessionManager] = None

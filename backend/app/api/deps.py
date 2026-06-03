@@ -10,7 +10,6 @@ from loguru import logger
 from app.core.config import Config
 from app.core.container import container
 from app.llm.base import LLMAdapter
-from app.retrieval.bm25 import BM25StoreAdapter
 from app.retrieval.vector_store import VectorStoreAdapter
 from app.services.qa_service import QAService
 from app.services.retrieval_service import RetrievalService
@@ -49,7 +48,6 @@ def get_retrieval_service() -> RetrievalService:
     return RetrievalService(
         config=container.config,
         vector_store=container.vector_store,
-        bm25_store=container.bm25_store,
         reranker=container.reranker
     )
 

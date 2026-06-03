@@ -289,55 +289,98 @@ body {
 .content p { margin-bottom: 1em; }
 .content p:last-child { margin-bottom: 0; }
 .content pre {
-    background: rgba(0,0,0,0.5);
-    padding: 12px;
-    border-radius: 8px;
+    background: #18181c;
+    padding: 14px 18px;
+    border-radius: 10px;
     overflow-x: auto;
-    margin: 12px 0;
+    margin: 14px 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 .content code {
-    font-family: monospace;
-    font-size: 0.85em;
-    background: rgba(0,0,0,0.3);
-    padding: 2px 4px;
-    border-radius: 4px;
+    font-family: 'Fira Code', Consolas, Monaco, monospace;
+    font-size: 0.88em;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 6px;
+    border-radius: 6px;
+    color: #fca5a5;
+}
+.content pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
 }
 
 /* Thought Process */
 .thought-process {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     border: 1px solid var(--border-glass);
-    border-radius: 8px;
-    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.thought-process:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
 }
 
 .thought-header {
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    font-weight: 500;
     color: var(--text-muted);
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: rgba(255,255,255,0.02);
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.01);
     user-select: none;
+    transition: all 0.2s ease;
 }
 
 .thought-header:hover {
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+}
+
+.thought-header svg {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+    color: var(--text-muted);
+}
+
+/* 利用现代 :has 伪类实现折叠展开时的炫酷图标旋转与主题颜色高亮 */
+.thought-process:has(.thought-content.open) .thought-header svg {
+    transform: rotate(90deg);
+    color: var(--accent);
+}
+
+.thought-process:has(.thought-content.open) {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(59, 130, 246, 0.25);
 }
 
 .thought-content {
-    padding: 12px;
-    font-size: 0.8rem;
-    color: var(--text-muted);
+    padding: 16px;
+    font-size: 0.82rem;
+    color: #94a3b8;
     border-top: 1px solid var(--border-glass);
+    background: rgba(0, 0, 0, 0.1);
     display: none;
+    line-height: 1.6;
 }
 
 .thought-content.open {
     display: block;
+    animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Sources */
