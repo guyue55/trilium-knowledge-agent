@@ -40,17 +40,20 @@ class Reranker:
             return False
 
     def rerank_and_filter(
-        self, docs_with_scores: List[Tuple[Document, float]], query: str
+        self, docs_with_scores: List[Tuple[Document, float]], query: str, search_k: int = None, threshold: float = None
     ) -> List[Document]:
         """对检索结果进行重排并应用阈值过滤 (兼容最新 FastEmbed TextCrossEncoder)."""
         if not docs_with_scores:
             return []
 
+        k_val = search_k if search_k is not None else self.config.search_k
+        thresh_val = threshold if threshold is not None else self.config.reranker_threshold
+
         # 降级逻辑
         if not self._model or not self.config.use_reranker:
             # 简单去重并按照原始分数排序
             docs_with_scores.sort(key=lambda x: x[1], reverse=True)
-            return [doc for doc, _ in docs_with_scores[:self.config.search_k]]
+            return [doc for doc, _ in docs_with_scores[:k_val]]
 
         docs = [doc for doc, _ in docs_with_scores]
         texts = [doc.page_content for doc in docs]
@@ -59,19 +62,19 @@ class Reranker:
             # 最新 FastEmbed TextCrossEncoder.rerank 直接返回 float 类型分数列表
             scores = list(self._model.rerank(query, texts))
             
-            # 使用 zip 关联文档和分数，并按照分数进行降序重排
+            # 使用 zip 关联文档 and 分数，并按照分数进行降序重排
             paired_docs = list(zip(docs, scores))
             paired_docs.sort(key=lambda x: x[1], reverse=True)
             
             filtered_docs = []
             for doc, score in paired_docs:
                 # 过滤不符合重排阈值的文档 (Xenova / BGE 的输出可能是实数)
-                if score >= self.config.reranker_threshold:
+                if score >= thresh_val:
                     filtered_docs.append(doc)
                     
             # 最终截断到 search_k
-            return filtered_docs[:self.config.search_k]
+            return filtered_docs[:k_val]
             
         except Exception as e:
             logger.error(f"重排过程中发生异常: {e}，回退到原始结果")
-            return [doc for doc, _ in docs_with_scores[:self.config.search_k]]
+            return [doc for doc, _ in docs_with_scores[:k_val]]

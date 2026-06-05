@@ -56,11 +56,11 @@ def mock_config():
     config.embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
     config.embedding_model_local_path = "./test_data/models/embedding"
     config.llm_model_path = "./test_data/models/llm"
-    config.llm_model_type = "gpt4all"
+    config.llm_model_type = "ollama"
     config.qwen_api_key = ""
-    config.search_k = ConfigConstants.DEFAULT_SEARCH_K
-    config.chunk_size = ConfigConstants.DEFAULT_CHUNK_SIZE
-    config.chunk_overlap = ConfigConstants.DEFAULT_CHUNK_OVERLAP
+    config.search_k = 5
+    config.chunk_size = 500
+    config.chunk_overlap = 50
     config.hf_endpoint = "https://hf-mirror.com"
 
     return config

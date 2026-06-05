@@ -12,7 +12,7 @@ from loguru import logger
 
 from app.llm.base import LLMAdapter
 from app.qa.cache import CacheManager
-from app.qa.memory import SessionManager
+from app.qa.memory import SessionManager, MemoryManager
 from app.services.retrieval_service import RetrievalService
 from app.services.intent_router import IntentRouter
 
@@ -26,18 +26,32 @@ class QAService:
         retrieval_service: RetrievalService,
         cache_manager: CacheManager,
         session_manager: SessionManager,
+        memory_manager: MemoryManager,
     ):
         self.llm_adapter = llm_adapter
         self.retrieval_service = retrieval_service
         self.cache_manager = cache_manager
         self.session_manager = session_manager
+        self.memory_manager = memory_manager
         self.intent_router = IntentRouter()
+        # Session-level 锁机制，杜绝对全局多租户/多会话并发的任何排队阻塞
+        self._session_locks: Dict[str, asyncio.Lock] = {}
+        self._session_locks_lock = asyncio.Lock()
 
-        self._llm_lock = asyncio.Lock()
+    async def _get_session_lock(self, session_id: str) -> asyncio.Lock:
+        """注册并获取指定会话的局部 Lock，保障单 Session 时序一致性的同时，实现全局多会话完全并行."""
+        async with self._session_locks_lock:
+            if session_id not in self._session_locks:
+                self._session_locks[session_id] = asyncio.Lock()
+            return self._session_locks[session_id]
 
     def _get_chitchat_prompt_template(self) -> str:
         return """你是一个友好、优雅、聪明的 AI 助手。
-请以亲切自然、充满科技感和温暖的语气回复用户的日常闲聊、问候或简单互动。
+
+【长期记忆与用户偏好】：
+{agent_memory}
+
+请以亲切自然、充满科技感和温暖的语气回复用户的日常闲聊、问候或简单互动。如果你认识这个用户（长期记忆中有记录），请展现出亲切的主动问候与背景融入！
 要求：
 1. 必须使用中文回答。
 2. 保持回答得体、简洁、幽默且专业，展现出 Google 风格的高级质感。
@@ -51,7 +65,11 @@ class QAService:
 
     def _get_general_prompt_template(self) -> str:
         return """你是一个友好、优雅、聪明的 AI 助手。
-由于用户的提问超出了你当前专属知识库的覆盖范围，请基于你的通用知识为用户提供高水平的解答。
+
+【长期记忆与用户偏好】：
+{agent_memory}
+
+由于用户的提问超出了你当前专属知识库的覆盖范围，请基于你的通用知识为用户提供高水平的解答。如果你认识这个用户（长期记忆中有记录），请结合他的偏好、OS 或项目背景来定制你的回答！
 要求：
 1. 必须使用中文回答。
 2. 展现出你渊博的知识，保持得体、专业且充满 Google 风格的高级质感。
@@ -65,15 +83,19 @@ class QAService:
 
     def _get_prompt_template(self) -> str:
         return """你是一个专门解答基于知识库内容问题的智能助手。
-请根据以下检索到的参考信息和对话历史来回答用户的问题。
+
+【长期记忆与用户偏好】：
+{agent_memory}
+
+【参考信息（RAG 知识片段）】：
+{context}
+
 要求：
 1. 必须使用中文回答。
-2. 你的回答必须完全基于参考信息，不要编造参考信息中没有的内容。如果参考信息中无法得出答案，请直接回复"根据提供的知识库信息，我无法回答这个问题"。
-3. 请尽可能给出详细、准确的回答，可以引用原文。
-4. 必须将你的最终答案包裹在 <answer> 和 </answer> 标签之间！！！
-
-参考信息：
-{context}
+2. 你的回答必须完全基于上述【参考信息】，不要编造参考信息中没有的内容。如果参考信息中无法得出答案，请直接回复"根据提供的知识库信息，我无法回答这个问题"。
+3. 必须确保你回答中的每一个核心技术事实句尾，使用 `[i]` 标号注明其来源（其中 i 是参考信息中的“参考 i”的数字标号，例如：`这是事实[1]。这是另外一个事实[2]`）。
+4. 绝对禁止对没有事实来源的句子打上引用角标。禁止编造不存在的角标，引用的角标必须 100% 存在于上述参考信息列表中！
+5. 必须将你的最终答案包裹在 <answer> 和 </answer> 标签之间！！！
 
 对话历史：
 {chat_history}
@@ -129,8 +151,12 @@ class QAService:
                 return cached_result
 
         try:
-            # 1. 前置意图识别
-            intent = self.intent_router.classify(question)
+            # 1. 前置意图分类与 RAG 检索并行化 (Milestone 18: Speculative Concurrency)
+            # 利用 asyncio.gather 并发化 CPU 密集正则拦截与 I/O 密集型数据库检索
+            intent_task = asyncio.create_task(asyncio.to_thread(self.intent_router.classify, question))
+            retrieval_task = asyncio.create_task(self.retrieval_service.retrieve_and_rerank(question))
+            
+            intent, (filtered_docs, raw_docs) = await asyncio.gather(intent_task, retrieval_task)
             
             if intent == "CHITCHAT":
                 filtered_docs = []
@@ -138,8 +164,6 @@ class QAService:
                 context_str = "无"
                 prompt_template = self._get_chitchat_prompt_template()
             else:
-                # 委托检索服务
-                filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
                 if not filtered_docs:
                     logger.info(f"QAService: 检索重排后没有满足阈值的核心切片，自动切换至 [GENERAL_CHAT] 通用自由对话模式。")
                     intent = "GENERAL_CHAT"
@@ -149,28 +173,37 @@ class QAService:
                     context_str = self._format_context(filtered_docs)
                     prompt_template = self._get_prompt_template()
 
-            # 2. 构建上下文与历史
+            # 2. 构建上下文与历史以及长期记忆
             if self.session_manager:
                 history = await self.session_manager.get_history(session_id)
                 history_str = self._format_history(history)
             else:
                 history_str = "无"
 
+            agent_memory = await self.memory_manager.get_memory()
+            if self.session_manager:
+                session_summary = await self.session_manager.get_summary(session_id)
+                if session_summary:
+                    agent_memory = f"{agent_memory}\n\n【当前会话历史演进背景摘要（Session Background Summary）】:\n{session_summary}"
+
             # 3. 生成 Prompt
             if intent in ("CHITCHAT", "GENERAL_CHAT"):
                 prompt_value = prompt_template.format(
+                    agent_memory=agent_memory,
                     chat_history=history_str,
                     question=question
                 )
             else:
                 prompt_value = prompt_template.format(
+                    agent_memory=agent_memory,
                     context=context_str,
                     chat_history=history_str,
                     question=question
                 )
 
-            # 4. LLM 推理
-            async with self._llm_lock:
+            # 4. LLM 推理 (使用 Session 局部锁，杜绝全局阻塞)
+            session_lock = await self._get_session_lock(session_id)
+            async with session_lock:
                 raw_answer = await asyncio.to_thread(
                     self.llm_adapter.generate,
                     prompt_value
@@ -179,7 +212,14 @@ class QAService:
             # 5. 清理答案并记录历史
             final_answer = self._clean_answer(raw_answer)
             if self.session_manager:
-                await self.session_manager.add_interaction(session_id, question, final_answer)
+                await self.session_manager.add_interaction(session_id, question, final_answer, self.llm_adapter)
+
+            # 5.1 异步自主突变更新长期记忆 Markdown（不阻塞实时响应）
+            asyncio.create_task(
+                self.memory_manager.update_memory_autonomously(
+                    self.llm_adapter, question, final_answer
+                )
+            )
 
             # 6. 构造返回结果
             response = {
@@ -189,11 +229,10 @@ class QAService:
                         "title": doc.metadata.get("title", "未知"),
                         "note_id": doc.metadata.get("note_id", ""),
                         "content": doc.page_content,
-                        "score": score,
+                        "score": doc.metadata.get("score", 0.0),
                         "path": doc.metadata.get("path", "")
                     }
                     for doc in filtered_docs
-                    for raw_doc, score in raw_docs if raw_doc == doc
                 ]
             }
 
@@ -226,8 +265,12 @@ class QAService:
                 return
 
         try:
-            # 1. 前置意图识别
-            intent = self.intent_router.classify(question)
+            # 1. 前置意图分类与 RAG 检索并行化 (Milestone 18: Speculative Concurrency)
+            # 利用 asyncio.gather 并发化 CPU 密集正则拦截与 I/O 密集型数据库检索
+            intent_task = asyncio.create_task(asyncio.to_thread(self.intent_router.classify, question))
+            retrieval_task = asyncio.create_task(self.retrieval_service.retrieve_and_rerank(question))
+            
+            intent, (filtered_docs, raw_docs) = await asyncio.gather(intent_task, retrieval_task)
             
             if intent == "CHITCHAT":
                 filtered_docs = []
@@ -236,8 +279,6 @@ class QAService:
                 context_str = "无"
                 prompt_template = self._get_chitchat_prompt_template()
             else:
-                # 委托检索服务
-                filtered_docs, raw_docs = await self.retrieval_service.retrieve_and_rerank(question)
                 if not filtered_docs:
                     logger.info(f"QAService: 流式检索重排后没有满足阈值的核心切片，自动切换至 [GENERAL_CHAT] 通用自由对话模式。")
                     intent = "GENERAL_CHAT"
@@ -245,46 +286,53 @@ class QAService:
                     context_str = "无"
                     prompt_template = self._get_general_prompt_template()
                 else:
-                    sources = []
-                    for doc in filtered_docs:
-                        for raw_doc, score in raw_docs:
-                            if raw_doc == doc:
-                                sources.append({
-                                    "title": doc.metadata.get("title", "未知"),
-                                    "note_id": doc.metadata.get("note_id", ""),
-                                    "content": doc.page_content,
-                                    "score": score,
-                                    "path": doc.metadata.get("path", "")
-                                })
-                                break
+                    sources = [
+                        {
+                            "title": doc.metadata.get("title", "未知"),
+                            "note_id": doc.metadata.get("note_id", ""),
+                            "content": doc.page_content,
+                            "score": doc.metadata.get("score", 0.0),
+                            "path": doc.metadata.get("path", "")
+                        }
+                        for doc in filtered_docs
+                    ]
                     context_str = self._format_context(filtered_docs)
                     prompt_template = self._get_prompt_template()
             
             yield {"type": "sources", "data": sources}
 
-            # 2. 构建上下文与历史
+            # 2. 构建上下文与历史以及长期记忆
             if self.session_manager:
                 history = await self.session_manager.get_history(session_id)
                 history_str = self._format_history(history)
             else:
                 history_str = "无"
 
+            agent_memory = await self.memory_manager.get_memory()
+            if self.session_manager:
+                session_summary = await self.session_manager.get_summary(session_id)
+                if session_summary:
+                    agent_memory = f"{agent_memory}\n\n【当前会话历史演进背景摘要（Session Background Summary）】:\n{session_summary}"
+
             # 3. 生成 Prompt
             if intent in ("CHITCHAT", "GENERAL_CHAT"):
                 prompt_value = prompt_template.format(
+                    agent_memory=agent_memory,
                     chat_history=history_str,
                     question=question
                 )
             else:
                 prompt_value = prompt_template.format(
+                    agent_memory=agent_memory,
                     context=context_str,
                     chat_history=history_str,
                     question=question
                 )
 
-            # 4. LLM 推理 (流式)
+            # 4. LLM 推理 (流式) (使用 Session 局部锁，杜绝全局阻塞)
             full_answer = ""
-            async with self._llm_lock:
+            session_lock = await self._get_session_lock(session_id)
+            async with session_lock:
                 async for chunk in self.llm_adapter.agenerate_stream(prompt_value):
                     full_answer += chunk
                     clean_chunk = chunk.replace("<answer>", "").replace("</answer>", "").replace("<ANSWER>", "").replace("</ANSWER>", "")
@@ -294,7 +342,14 @@ class QAService:
             # 5. 清理答案并记录历史
             final_answer = self._clean_answer(full_answer)
             if self.session_manager:
-                await self.session_manager.add_interaction(session_id, question, final_answer)
+                await self.session_manager.add_interaction(session_id, question, final_answer, self.llm_adapter)
+
+            # 5.1 异步自主突变更新长期记忆 Markdown（不阻塞实时响应）
+            asyncio.create_task(
+                self.memory_manager.update_memory_autonomously(
+                    self.llm_adapter, question, final_answer
+                )
+            )
 
             # 6. 保存缓存
             if self.cache_manager:

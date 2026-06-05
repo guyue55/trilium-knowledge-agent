@@ -108,8 +108,8 @@ class Config(BaseSettings):
     # ============================================
     # 语言模型配置
     # ============================================
-    llm_model_path: str = Field(default="./data/models/gpt4all/ggml-gpt4all-j-v1.3-groovy.bin")
-    llm_model_type: str = Field(default="gpt4all")
+    llm_model_path: str = Field(default="qwen2.5:7b")
+    llm_model_type: str = Field(default="ollama")
     llm_use_api: bool = Field(default=False)
     qwen_api_key: str = Field(default="", repr=False)
     openai_api_key: str = Field(default="", repr=False)
@@ -149,6 +149,7 @@ class Config(BaseSettings):
     # ============================================
     qa_cache_size: int = Field(default=100, ge=0)
     qa_cache_ttl: int = Field(default=3600, ge=0)
+    response_mode: str = Field(default="balanced")
 
     # ============================================
     # 镜像源与安全配置
@@ -170,8 +171,7 @@ class Config(BaseSettings):
         self.vector_db_dir = normalize_to_absolute(self.vector_db_dir)
         self.embedding_model_local_path = normalize_to_absolute(self.embedding_model_local_path)
         self.reranker_model_local_path = normalize_to_absolute(self.reranker_model_local_path)
-        if self.llm_model_type.lower() == "gpt4all":
-            self.llm_model_path = normalize_to_absolute(self.llm_model_path)
+
 
         warnings = []
         errors = []
@@ -188,7 +188,7 @@ class Config(BaseSettings):
             errors.append(f"CHUNK_OVERLAP ({self.chunk_overlap}) 必须小于 CHUNK_SIZE ({self.chunk_size})")
 
         # 3. LLM 模型的现代支持与柔性校验
-        valid_llm_types = ["gpt4all", "qwen", "openai", "ollama", "deepseek", "gemini"]
+        valid_llm_types = ["qwen", "openai", "ollama", "deepseek", "gemini"]
         model_type_lower = self.llm_model_type.lower()
         if model_type_lower not in valid_llm_types:
             errors.append(f"LLM_MODEL_TYPE 必须是 {valid_llm_types} 之一，当前值为 {self.llm_model_type}")

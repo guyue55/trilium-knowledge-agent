@@ -215,7 +215,7 @@ class TestConfigDefaults:
     )
     def test_default_values(self):
         """测试所有默认值是否正确."""
-        config = Config()
+        config = Config(_env_file=None)
 
         # Trilium配置默认值
         assert config.depth == 10
@@ -230,7 +230,7 @@ class TestConfigDefaults:
         assert config.search_k == 10
 
         # 模型类型默认值
-        assert config.llm_model_type == "gpt4all"
+        assert config.llm_model_type == "ollama"
 
         # 镜像源默认值
         assert config.hf_endpoint == "https://hf-mirror.com"

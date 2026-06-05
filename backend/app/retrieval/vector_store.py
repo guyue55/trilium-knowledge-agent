@@ -3,6 +3,8 @@
 
 import os
 import threading
+import asyncio
+import inspect
 from typing import Any, List, Tuple, Dict
 from loguru import logger
 import lancedb
@@ -135,47 +137,54 @@ class VectorStoreAdapter:
         except Exception as e:
             logger.error(f"添加文档到 LanceDB 失败: {e}")
 
-    def similarity_search_with_scores(self, query: str, k: int = 5, score_threshold: float = 0.0) -> List[Tuple[Document, float]]:
+    async def similarity_search_with_scores(self, query: str, k: int = 5, score_threshold: float = 0.0) -> List[Tuple[Document, float]]:
         """执行黄金标准应用层 RRF 混合搜索 (纯向量语义搜索 + FTS/BM25 精准全文检索)."""
         if self.table is None:
             return []
             
         try:
-            query_vector = self.embedding_adapter.embed_query(query)
+            # 1. 异步化向量化查询，释放主线程 CPU 阻塞
+            query_vector = await asyncio.to_thread(self.embedding_adapter.embed_query, query)
             if not query_vector:
                 return []
                 
-            # 1. 向量路安全检索 (获取 2 * k 个候选，移除了 _db_lock 互斥，支持天然多线程高并发读)
-            vector_candidates = []
-            try:
-                vector_candidates = self.table.search(query_vector).limit(k * 2).to_list()
-            except Exception as e:
-                logger.warning(f"向量路检索失败: {e}")
-
-            # 2. 全文检索 FTS 路安全检索 (获取 2 * k 个候选，移除了 _db_lock 互斥)
-            fts_candidates = []
-            try:
-                # 对中文 Query 进行 jieba 智能分词以成倍提升 FTS 中文召回率
-                fts_query = query
-                import re
-                if re.search(r"[\u4e00-\u9fa5]", query):
-                    try:
-                        import jieba
-                        # 使用 cut_for_search (更适合搜索引擎的分词模式)
+            # 2. 预备 FTS 全文分词 Query，同样将 jieba 分词包装在独立线程中避免阻塞
+            fts_query = query
+            import re
+            if re.search(r"[\u4e00-\u9fa5]", query):
+                try:
+                    import jieba
+                    def _get_jieba_words():
                         words = list(jieba.cut_for_search(query))
-                        if words:
-                            fts_query = " ".join(words)
-                            logger.debug(f"FTS 中文分词增强：原 Query = '{query}' -> 分词 Query = '{fts_query}'")
-                    except Exception as jieba_e:
-                        logger.warning(f"Jieba 分词失败，回退到原始全文搜索: {jieba_e}")
+                        return " ".join(words) if words else query
+                    fts_query = await asyncio.to_thread(_get_jieba_words)
+                    logger.debug(f"FTS 中文分词增强：原 Query = '{query}' -> 分词 Query = '{fts_query}'")
+                except Exception as jieba_e:
+                    logger.warning(f"Jieba 分词失败，回退到原始全文搜索: {jieba_e}")
 
-                # 仅当创建了 FTS 索引时可以执行。LanceDB 在空表或未建立索引时会抛异常。
-                fts_candidates = self.table.search(fts_query, query_type="fts").limit(k * 2).to_list()
-            except Exception as e:
-                # 刚启动或无数据时报错属正常情况，优雅捕获并记录 debug
-                logger.debug(f"FTS 全文路检索跳过或不可用 (可能因为数据库为空或索引未建立): {e}")
+            # 3. 定义两路独立检索的同步包装闭包，由 asyncio.to_thread 投递至多核子线程并发物理执行
+            def _vector_search_sync():
+                try:
+                    return self.table.search(query_vector).limit(k * 2).to_list()
+                except Exception as e:
+                    logger.warning(f"向量路检索失败: {e}")
+                    return []
 
-            # 3. 倒数排名融合 (Reciprocal Rank Fusion)
+            def _fts_search_sync():
+                try:
+                    return self.table.search(fts_query, query_type="fts").limit(k * 2).to_list()
+                except Exception as e:
+                    # 刚启动或无数据时报错属正常情况，优雅捕获并记录 debug
+                    logger.debug(f"FTS 全文路检索跳过或不可用 (可能因为数据库为空或索引未建立): {e}")
+                    return []
+
+            # 4. 协程并发双路并行检索：突破 GIL 锁束缚，完美调动 LanceDB/Rust 底层物理多核性能
+            vector_task = asyncio.to_thread(_vector_search_sync)
+            fts_task = asyncio.to_thread(_fts_search_sync)
+            
+            vector_candidates, fts_candidates = await asyncio.gather(vector_task, fts_task)
+
+            # 5. 倒数排名融合 (Reciprocal Rank Fusion)
             # 常数 C 设为 60.0 (业界公认数学性能最均衡参数)
             C = 60.0
             rrf_scores = {}

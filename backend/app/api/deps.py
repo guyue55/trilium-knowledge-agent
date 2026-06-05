@@ -53,7 +53,7 @@ def get_retrieval_service() -> RetrievalService:
 
 
 def get_qa_service() -> QAService:
-    if not container.cache_manager or not container.session_manager:
+    if not container.cache_manager or not container.session_manager or not container.memory_manager:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
             detail="QA dependencies are not fully initialized"
@@ -66,5 +66,6 @@ def get_qa_service() -> QAService:
         llm_adapter=llm_adapter,
         retrieval_service=retrieval_service,
         cache_manager=container.cache_manager,
-        session_manager=container.session_manager
+        session_manager=container.session_manager,
+        memory_manager=container.memory_manager
     )

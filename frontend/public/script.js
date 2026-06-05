@@ -11,6 +11,16 @@ document.addEventListener("DOMContentLoaded", () => {
     let isGenerating = false;
     let cachedTriliumBaseUrl = "http://localhost:8080"; // 默认 Trilium 基准网页地址
 
+    // Create global citation popover element if it doesn't exist
+    let popover = document.getElementById("citation-popover");
+    if (!popover) {
+        popover = document.createElement("div");
+        popover.id = "citation-popover";
+        popover.className = "citation-popover";
+        popover.style.display = "none";
+        document.body.appendChild(popover);
+    }
+
     // 常规 UI 选择器
     const chatHistory = document.getElementById("chat-history");
     const chatInput = document.getElementById("chat-input");
@@ -51,11 +61,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const cfgOpenaiKey = document.getElementById("cfg-openai-key");
     const cfgDeepseekKey = document.getElementById("cfg-deepseek-key");
     const cfgGeminiKey = document.getElementById("cfg-gemini-key");
+    const cfgQwenKey = document.getElementById("cfg-qwen-key");
     const cfgUseReranker = document.getElementById("cfg-use-reranker");
     const cfgRerankerThreshold = document.getElementById("cfg-reranker-threshold");
     const cfgSearchK = document.getElementById("cfg-search-k");
     const valRerankerThreshold = document.getElementById("val-reranker-threshold");
     const valSearchK = document.getElementById("val-search-k");
+    const cfgMemoryContent = document.getElementById("cfg-memory-content");
+
+    // 2026 智能化自适应及引证追加选择器
+    const cfgResponseMode = document.getElementById("cfg-response-mode");
+    const cfgLlmPathSelect = document.getElementById("cfg-llm-path-select");
+    const btnToggleAdvanced = document.getElementById("btn-toggle-advanced");
+    const advancedHyperparams = document.getElementById("advanced-hyperparams");
+    const triliumStatusDot = document.getElementById("trilium-status-dot");
+    const llmStatusDot = document.getElementById("llm-status-dot");
 
     // 切片详情预览弹窗选择器
     const previewModal = document.getElementById("preview-modal");
@@ -162,6 +182,64 @@ document.addEventListener("DOMContentLoaded", () => {
     // 抽屉保存
     btnSettingsSave.addEventListener("click", saveSettings);
 
+    // ==========================================
+    // 3.5 2026 智能化自适应与实时验证事件绑定
+    // ==========================================
+    
+    // 回答风格卡片切换
+    const styleCards = document.querySelectorAll(".style-card");
+    styleCards.forEach(card => {
+        card.addEventListener("click", () => {
+            styleCards.forEach(c => c.classList.remove("active"));
+            card.classList.add("active");
+            const mode = card.getAttribute("data-mode");
+            if (cfgResponseMode) cfgResponseMode.value = mode;
+        });
+    });
+
+    // 高级参数折叠切换 (2026 业内专家极光 3D 阻尼滑动重构)
+    if (btnToggleAdvanced && advancedHyperparams) {
+        btnToggleAdvanced.addEventListener("click", () => {
+            const isShown = advancedHyperparams.classList.toggle("show");
+            
+            // 切换小箭头的 3D 旋转及文本描述
+            const toggleIcon = btnToggleAdvanced.querySelector(".toggle-icon");
+            const btnSpan = btnToggleAdvanced.querySelector("span");
+            
+            if (isShown) {
+                if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
+                if (btnSpan) btnSpan.textContent = "隐藏高级控制台超参";
+            } else {
+                if (toggleIcon) toggleIcon.style.transform = "rotate(0deg)";
+                if (btnSpan) btnSpan.textContent = "显示高级控制台超参";
+            }
+            
+            // 智能联动：高级控制台超参状态改变时，实时触发面板披露自适应渲染 (如让 API_BASE 协同折叠/滑出)
+            if (cfgLlmType) {
+                renderDynamicConfigPanels(cfgLlmType.value);
+            }
+        });
+    }
+
+    // Connection checks and Ollama discovery listeners
+    if (cfgTriliumUrl) {
+        cfgTriliumUrl.addEventListener("input", debouncedTestTrilium);
+    }
+    if (cfgApiBase) {
+        cfgApiBase.addEventListener("input", debouncedTestLlm);
+    }
+    if (cfgLlmType) {
+        cfgLlmType.addEventListener("change", () => {
+            if (typeof debouncedTestLlm === "function") debouncedTestLlm();
+            if (typeof handleLlmTypeChange === "function") handleLlmTypeChange();
+        });
+    }
+    if (cfgLlmPathSelect) {
+        cfgLlmPathSelect.addEventListener("change", () => {
+            if (cfgLlmPath) cfgLlmPath.value = cfgLlmPathSelect.value;
+        });
+    }
+
     // 弹窗关闭
     btnModalClose.addEventListener("click", closePreviewModal);
     btnModalCloseFooter.addEventListener("click", closePreviewModal);
@@ -172,6 +250,462 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // 4. 业务逻辑方法实现
     // ==========================================
+
+    // ==========================================
+    // 4.5 2026 智能化探测与自适应底层算法
+    // ==========================================
+
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    }
+
+    function escapeHTML(str) {
+        if (!str) return "";
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    async function testTriliumConnection() {
+        if (!cfgTriliumUrl) return;
+        const url = cfgTriliumUrl.value.trim();
+        if (!url) {
+            setDotStatus(triliumStatusDot, "offline", "Trilium URL 不能为空");
+            return;
+        }
+        setDotStatus(triliumStatusDot, "checking", "正在探测 Trilium 连通性...");
+        try {
+            const token = getAuthToken();
+            const response = await fetch("/api/v1/config/test_connection", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": token
+                },
+                body: JSON.stringify({
+                    target: "trilium",
+                    trilium_base_url: url
+                })
+            });
+            if (response.ok) {
+                const res = await response.json();
+                if (res.connected) {
+                    setDotStatus(triliumStatusDot, "online", res.message || "Trilium 已连接");
+                } else {
+                    setDotStatus(triliumStatusDot, "offline", res.message || "Trilium 连接失败");
+                }
+            } else {
+                setDotStatus(triliumStatusDot, "offline", `HTTP 错误: ${response.status}`);
+            }
+        } catch (e) {
+            setDotStatus(triliumStatusDot, "offline", `异常: ${e.message}`);
+        }
+    }
+
+    async function testLlmConnection() {
+        if (!cfgLlmType) return;
+        const provider = cfgLlmType.value;
+        const apiBase = cfgApiBase ? cfgApiBase.value.trim() : "";
+        
+        setDotStatus(llmStatusDot, "checking", `正在探测 ${provider} 接口可达性...`);
+        try {
+            const token = getAuthToken();
+            const response = await fetch("/api/v1/config/test_connection", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": token
+                },
+                body: JSON.stringify({
+                    target: "llm",
+                    llm_model_type: provider,
+                    openai_api_base: apiBase
+                })
+            });
+            if (response.ok) {
+                const res = await response.json();
+                if (res.connected) {
+                    setDotStatus(llmStatusDot, "online", res.message || `${provider} 网关已连接`);
+                } else {
+                    setDotStatus(llmStatusDot, "offline", res.message || `${provider} 探测失败`);
+                }
+            } else {
+                setDotStatus(llmStatusDot, "offline", `HTTP 错误: ${response.status}`);
+            }
+        } catch (e) {
+            setDotStatus(llmStatusDot, "offline", `异常: ${e.message}`);
+        }
+    }
+
+    function setDotStatus(dot, status, title) {
+        if (!dot) return;
+        dot.className = "live-status-dot " + status;
+        dot.title = title;
+    }
+
+    const debouncedTestTrilium = debounce(testTriliumConnection, 500);
+    const debouncedTestLlm = debounce(testLlmConnection, 500);
+
+    async function handleLlmTypeChange(selectedModelValue = null) {
+        if (!cfgLlmType || !cfgLlmPath || !cfgLlmPathSelect) return;
+        const type = cfgLlmType.value;
+        
+        // 动态更换模型物理路径/标识的专属占位符
+        if (cfgLlmPath) {
+            switch (type) {
+                case "ollama":
+                    cfgLlmPath.placeholder = "例如: qwen2.5:7b, llama3, mistral 等";
+                    break;
+                case "deepseek":
+                    cfgLlmPath.placeholder = "例如: deepseek-chat, deepseek-coder";
+                    break;
+                case "gemini":
+                    cfgLlmPath.placeholder = "例如: gemini-1.5-flash, gemini-1.5-pro";
+                    break;
+                case "qwen":
+                    cfgLlmPath.placeholder = "例如: qwen-turbo, qwen-plus, qwen-max";
+                    break;
+                case "openai":
+                default:
+                    cfgLlmPath.placeholder = "例如: gpt-4o, gpt-3.5-turbo 等";
+                    break;
+            }
+        }
+
+        // 动态自适应呈现与披露配置面板
+        renderDynamicConfigPanels(type);
+
+        if (type === "ollama") {
+            cfgLlmPath.style.display = "none";
+            cfgLlmPathSelect.style.display = "block";
+            cfgLlmPathSelect.innerHTML = `<option value="">⌛ 正在自动检测本地模型...</option>`;
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch("/api/v1/config/detect_ollama", {
+                    headers: { "X-API-Key": token }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const models = data.models || [];
+                    if (models.length > 0) {
+                        cfgLlmPathSelect.innerHTML = "";
+                        models.forEach(model => {
+                            const opt = document.createElement("option");
+                            opt.value = model;
+                            opt.textContent = model;
+                            cfgLlmPathSelect.appendChild(opt);
+                        });
+                        
+                        if (selectedModelValue && models.includes(selectedModelValue)) {
+                            cfgLlmPathSelect.value = selectedModelValue;
+                        } else if (cfgLlmPath.value && models.includes(cfgLlmPath.value)) {
+                            cfgLlmPathSelect.value = cfgLlmPath.value;
+                        } else {
+                            cfgLlmPathSelect.selectedIndex = 0;
+                        }
+                        cfgLlmPath.value = cfgLlmPathSelect.value;
+                    } else {
+                        showToast("本地未检测到可用的已下载 Ollama 模型，已切换为手动输入", "warning");
+                        switchToTextInput();
+                    }
+                } else {
+                    switchToTextInput();
+                }
+            } catch (e) {
+                switchToTextInput();
+            }
+        } else {
+            cfgLlmPath.style.display = "block";
+            cfgLlmPathSelect.style.display = "none";
+        }
+    }
+
+    function renderDynamicConfigPanels(type) {
+        const wrapperApiBase = document.getElementById("wrapper-api-base");
+        const apiKeysSection = document.getElementById("api-keys-section");
+        const wrapperOpenai = document.getElementById("wrapper-openai-key");
+        const wrapperDeepseek = document.getElementById("wrapper-deepseek-key");
+        const wrapperGemini = document.getElementById("wrapper-gemini-key");
+        const wrapperQwen = document.getElementById("wrapper-qwen-key");
+
+        // 默认移除 show 类，折叠并隐藏所有动态面板
+        if (wrapperApiBase) wrapperApiBase.classList.remove("show");
+        if (apiKeysSection) apiKeysSection.classList.remove("show");
+        if (wrapperOpenai) wrapperOpenai.classList.remove("show");
+        if (wrapperDeepseek) wrapperDeepseek.classList.remove("show");
+        if (wrapperGemini) wrapperGemini.classList.remove("show");
+        if (wrapperQwen) wrapperQwen.classList.remove("show");
+
+        // 动态配置大模型 API Base 的标签名与占位符
+        const labelEl = wrapperApiBase ? wrapperApiBase.querySelector("label") : null;
+        if (labelEl) {
+            if (type === "ollama") {
+                labelEl.textContent = "Ollama 本地服务地址";
+            } else if (type === "qwen") {
+                labelEl.textContent = "通义千问代理地址 (API_BASE)";
+            } else if (type === "deepseek") {
+                labelEl.textContent = "DeepSeek 代理地址 (API_BASE)";
+            } else if (type === "gemini") {
+                labelEl.textContent = "Gemini 代理地址 (API_BASE)";
+            } else {
+                labelEl.textContent = "接口代理 Base 地址 (API_BASE)";
+            }
+        }
+
+        if (cfgApiBase) {
+            if (type === "ollama") {
+                cfgApiBase.placeholder = "例如: http://localhost:11434 (默认本机端口)";
+            } else if (type === "qwen") {
+                cfgApiBase.placeholder = "例如: https://dashscope.aliyuncs.com/compatible-mode/v1";
+            } else if (type === "deepseek") {
+                cfgApiBase.placeholder = "例如: https://api.deepseek.com/v1";
+            } else if (type === "gemini") {
+                cfgApiBase.placeholder = "例如: https://generativelanguage.googleapis.com";
+            } else {
+                cfgApiBase.placeholder = "默认官方地址，如: https://api.openai.com/v1";
+            }
+        }
+
+        // 高级超参控制台折叠展开状态判断 (极客微调支持)
+        const isAdvancedShown = advancedHyperparams && advancedHyperparams.classList.contains("show");
+        // 是否已经自定义了 API Base (用于 Ollama/Qwen 局域网或 Docker 跨容器连接逃生门)
+        const isCustomBase = cfgApiBase && cfgApiBase.value.trim() && 
+                             !cfgApiBase.value.includes("localhost") && 
+                             !cfgApiBase.value.includes("127.0.0.1") &&
+                             cfgApiBase.value !== "http://localhost:11434" &&
+                             cfgApiBase.value !== "http://127.0.0.1:11434";
+
+        // 根据大模型类型按需渐进披露
+        switch (type) {
+            case "ollama":
+                // 默认隐藏密钥。但若用户自定义了非 localhost 代理，或点开了极客高级控制台，则优雅滑出服务地址框
+                if (isCustomBase || isAdvancedShown) {
+                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
+                }
+                break;
+            case "deepseek":
+                if (apiKeysSection) apiKeysSection.classList.add("show");
+                if (wrapperDeepseek) wrapperDeepseek.classList.add("show");
+                // 允许中转代理微调
+                if (isCustomBase || isAdvancedShown) {
+                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
+                }
+                break;
+            case "gemini":
+                if (apiKeysSection) apiKeysSection.classList.add("show");
+                if (wrapperGemini) wrapperGemini.classList.add("show");
+                // 允许中转代理微调
+                if (isCustomBase || isAdvancedShown) {
+                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
+                }
+                break;
+            case "qwen":
+                if (apiKeysSection) apiKeysSection.classList.add("show");
+                if (wrapperQwen) wrapperQwen.classList.add("show");
+                // 允许中转代理微调
+                if (isCustomBase || isAdvancedShown) {
+                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
+                }
+                break;
+            case "openai":
+            default:
+                // OpenAI 兼容的第三方大模型必须输入 API Key 和 Base 接口地址
+                if (apiKeysSection) apiKeysSection.classList.add("show");
+                if (wrapperOpenai) wrapperOpenai.classList.add("show");
+                if (wrapperApiBase) wrapperApiBase.classList.add("show");
+                break;
+        }
+
+        // ==============================================================================
+        // 2026 UI/UX Premium Twin-Lock (JS Focus Immunity & Autofill Prevention)
+        // ==============================================================================
+        const updateInputLockState = (inputEl, wrapperEl, isParentShown = true) => {
+            if (!inputEl) return;
+            const isShown = wrapperEl && wrapperEl.classList.contains("show") && isParentShown;
+            if (isShown) {
+                inputEl.removeAttribute("disabled");
+                inputEl.tabIndex = 0;
+            } else {
+                inputEl.setAttribute("disabled", "true");
+                inputEl.tabIndex = -1;
+            }
+        };
+
+        const isKeysSectionShown = apiKeysSection && apiKeysSection.classList.contains("show");
+
+        updateInputLockState(cfgApiBase, wrapperApiBase, true);
+        updateInputLockState(cfgOpenaiKey, wrapperOpenai, isKeysSectionShown);
+        updateInputLockState(cfgDeepseekKey, wrapperDeepseek, isKeysSectionShown);
+        updateInputLockState(cfgGeminiKey, wrapperGemini, isKeysSectionShown);
+        updateInputLockState(cfgQwenKey, wrapperQwen, isKeysSectionShown);
+    }
+
+    function switchToTextInput() {
+        if (cfgLlmPath && cfgLlmPathSelect) {
+            cfgLlmPath.style.display = "block";
+            cfgLlmPathSelect.style.display = "none";
+        }
+    }
+
+    let popoverHideTimeout = null;
+
+    function showPopover(badge, doc, idx) {
+        if (!popover) return;
+        if (popoverHideTimeout) {
+            clearTimeout(popoverHideTimeout);
+            popoverHideTimeout = null;
+        }
+        
+        const cleanBaseUrl = cachedTriliumBaseUrl.replace(/\/+$/, "");
+        const jumpUrl = doc.note_id ? `${cleanBaseUrl}/#root/${doc.note_id}` : "#";
+        const title = doc.path ? doc.path.split(" > ").pop() : "参考来源";
+        
+        popover.innerHTML = `
+            <div class="citation-popover-header">
+                <span class="citation-popover-source" title="${doc.path || ''}">[${idx}] ${title}</span>
+                ${doc.note_id && doc.note_id !== 'note_id' && doc.note_id !== '无' ? `
+                <a href="${jumpUrl}" target="_blank" class="citation-popover-jump">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    <span>在 Trilium 中打开</span>
+                </a>` : ''}
+            </div>
+            <div class="citation-popover-body">${escapeHTML(doc.content || "无参考原文内容")}</div>
+        `;
+        
+        popover.style.display = "block";
+        
+        requestAnimationFrame(() => {
+            popover.classList.add("active");
+        });
+        
+        const rect = badge.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+        
+        const popoverHeight = popover.offsetHeight;
+        const popoverWidth = popover.offsetWidth;
+        
+        let top = rect.top + scrollTop - popoverHeight - 8;
+        let left = rect.left + scrollLeft + (rect.width / 2) - (popoverWidth / 2);
+        
+        if (left < 10) left = 10;
+        if (left + popoverWidth > window.innerWidth - 10) {
+            left = window.innerWidth - popoverWidth - 10;
+        }
+        if (rect.top - popoverHeight - 12 < 0) {
+            top = rect.bottom + scrollTop + 8;
+        }
+        
+        popover.style.top = `${top}px`;
+        popover.style.left = `${left}px`;
+    }
+
+    function hidePopover() {
+        if (!popover) return;
+        if (popoverHideTimeout) clearTimeout(popoverHideTimeout);
+        popoverHideTimeout = setTimeout(() => {
+            popover.classList.remove("active");
+            setTimeout(() => {
+                if (!popover.classList.contains("active")) {
+                    popover.style.display = "none";
+                }
+            }, 200);
+        }, 200);
+    }
+
+    if (popover) {
+        popover.addEventListener("mouseenter", () => {
+            if (popoverHideTimeout) {
+                clearTimeout(popoverHideTimeout);
+                popoverHideTimeout = null;
+            }
+        });
+        popover.addEventListener("mouseleave", () => {
+            hidePopover();
+        });
+    }
+
+    function replaceCitationsInDOM(element, sources) {
+        if (!element) return;
+        
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+            acceptNode: function(node) {
+                let parent = node.parentNode;
+                while (parent && parent !== element) {
+                    const tagName = parent.tagName.toLowerCase();
+                    if (tagName === "code" || tagName === "pre" || tagName === "a" || tagName === "script" || tagName === "style" || parent.classList.contains("citation-badge")) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    parent = parent.parentNode;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
+
+        const textNodes = [];
+        while (walker.nextNode()) {
+            textNodes.push(walker.currentNode);
+        }
+
+        const citationRegex = /\[(\d+)\]/g;
+
+        textNodes.forEach(node => {
+            const text = node.nodeValue;
+            if (!citationRegex.test(text)) return;
+            
+            citationRegex.lastIndex = 0;
+            const fragment = document.createDocumentFragment();
+            let lastIndex = 0;
+            let match;
+            
+            while ((match = citationRegex.exec(text)) !== null) {
+                const index = match[1];
+                const matchIndex = match.index;
+                
+                if (matchIndex > lastIndex) {
+                    fragment.appendChild(document.createTextNode(text.substring(lastIndex, matchIndex)));
+                }
+                
+                const sourceIndex = parseInt(index, 10);
+                if (sources && sourceIndex > 0 && sourceIndex <= sources.length) {
+                    const badge = document.createElement("span");
+                    badge.className = "citation-badge";
+                    badge.textContent = index;
+                    badge.setAttribute("data-idx", index);
+                    
+                    badge.addEventListener("mouseenter", () => {
+                        showPopover(badge, sources[sourceIndex - 1], sourceIndex);
+                    });
+                    badge.addEventListener("mouseleave", () => {
+                        hidePopover();
+                    });
+                    
+                    fragment.appendChild(badge);
+                } else {
+                    fragment.appendChild(document.createTextNode(match[0]));
+                }
+                
+                lastIndex = citationRegex.lastIndex;
+            }
+            
+            if (lastIndex < text.length) {
+                fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+            }
+            
+            if (node.parentNode) {
+                node.parentNode.replaceChild(fragment, node);
+            }
+        });
+    }
 
     // 获取 Auth Token
     function getAuthToken() {
@@ -683,6 +1217,9 @@ document.addEventListener("DOMContentLoaded", () => {
                                 const cleanText = responseText.replace(/<\/?answer>/gi, "");
                                 // 采用 Marked 编译 Markdown
                                 aiContentDiv.innerHTML = DOMPurify.sanitize(marked.parse(cleanText));
+                                if (typeof replaceCitationsInDOM === "function") {
+                                    replaceCitationsInDOM(aiContentDiv, sourcesReceived);
+                                }
                                 scrollToBottom();
                             }
                             // C. 异常信息错误
@@ -700,10 +1237,21 @@ document.addEventListener("DOMContentLoaded", () => {
             aiContentDiv.querySelectorAll("pre code").forEach(block => {
                 hljs.highlightElement(block);
             });
+            if (typeof replaceCitationsInDOM === "function") {
+                replaceCitationsInDOM(aiContentDiv, sourcesReceived);
+            }
 
         } catch (e) {
             console.error("SSE 网络连接异常:", e);
-            aiContentDiv.innerHTML = `<span style="color:var(--btn-danger);">❌ 无法连通后端服务，连接被拒绝或超时。</span>`;
+            if (responseText) {
+                // 已有部分回复，追加错误，不覆盖已生成的内容
+                aiContentDiv.innerHTML = DOMPurify.sanitize(marked.parse(responseText)) + 
+                    `<div style="color:var(--btn-danger); font-weight:500; margin-top:12px; border-top:1px dashed rgba(239, 68, 68, 0.2); padding-top:8px; font-size:13px; display:flex; align-items:center; gap:6px;">` +
+                    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>` +
+                    `流式连接异常中断，已为您保留已生成的内容</div>`;
+            } else {
+                aiContentDiv.innerHTML = `<span style="color:var(--btn-danger);">❌ 无法连通后端服务，连接被拒绝或超时。</span>`;
+            }
         } finally {
             isGenerating = false;
             btnSend.disabled = false;
@@ -791,10 +1339,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function openSettingsDrawer() {
         const token = getAuthToken();
-        if (!token) {
-            showToast("请先填入有效的 Auth Token 才能访问高级设置", "warning");
-            return;
-        }
+        let config = {};
 
         try {
             // 异步从后端拉取脱敏配置
@@ -802,38 +1347,84 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "X-API-Key": token }
             });
             if (!response.ok) {
-                showToast("获取后端配置失败，请核对鉴权凭证", "error");
-                return;
+                if (response.status === 403 || response.status === 401) {
+                    showToast("鉴权未通过，控制台已加载默认设置（请核对 Auth Token）", "warning");
+                } else {
+                    showToast("获取后端配置失败，控制台已加载本地缓存状态", "warning");
+                }
+            } else {
+                config = await response.json();
             }
-
-            const config = await response.json();
-
-            // 回显配置
-            cfgLlmType.value = config.llm_model_type || "ollama";
-            cfgLlmPath.value = config.llm_model_path || "";
-            cfgApiBase.value = config.openai_api_base || "";
-            cfgTriliumUrl.value = config.trilium_base_url || "";
-            
-            // 秘钥回显（若是 true 则展示占位符，避免真实秘钥泄露）
-            cfgOpenaiKey.value = config.openai_api_key ? "******" : "";
-            cfgDeepseekKey.value = config.deepseek_api_key ? "******" : "";
-            cfgGeminiKey.value = config.gemini_api_key ? "******" : "";
-
-            // RAG 算法参数回显
-            cfgUseReranker.checked = config.use_reranker;
-            cfgRerankerThreshold.value = config.reranker_threshold;
-            valRerankerThreshold.textContent = parseFloat(config.reranker_threshold).toFixed(2);
-            
-            cfgSearchK.value = config.search_k;
-            valSearchK.textContent = config.search_k;
-
-            // 打开抽屉
-            settingsDrawer.classList.add("active");
-            document.body.classList.add("no-scroll");
-
         } catch (e) {
-            showToast("网络请求失败，无法连接到设置控制台", "error");
+            console.warn("获取后端配置异常:", e);
+            showToast("未检测到后端服务，控制台已启用默认离线模式", "warning");
         }
+
+        // 无论如何回显配置（后端存在则采用后端，否则安全降级为默认值），防止报错阻断
+        cfgLlmType.value = config.llm_model_type || "ollama";
+        cfgLlmPath.value = config.llm_model_path || "";
+        cfgApiBase.value = config.openai_api_base || "";
+        cfgTriliumUrl.value = config.trilium_base_url || "";
+        
+        // 2026 前沿降维自适应回答风格回显
+        const respMode = config.response_mode || "balanced";
+        if (cfgResponseMode) cfgResponseMode.value = respMode;
+        document.querySelectorAll(".style-card").forEach(card => {
+            if (card.getAttribute("data-mode") === respMode) {
+                card.classList.add("active");
+            } else {
+                card.classList.remove("active");
+            }
+        });
+
+        // 异步自动进行 LLM 驱动形态切换与模型加载
+        if (typeof handleLlmTypeChange === "function") {
+            await handleLlmTypeChange(config.llm_model_path);
+        }
+
+        // 触发实时的双色脉冲连接指示灯探测
+        if (typeof testTriliumConnection === "function") testTriliumConnection();
+        if (typeof testLlmConnection === "function") testLlmConnection();
+        
+        // 秘钥回显（若是 true 则展示占位符，避免真实秘钥泄露）
+        cfgOpenaiKey.value = config.openai_api_key ? "******" : "";
+        cfgDeepseekKey.value = config.deepseek_api_key ? "******" : "";
+        cfgGeminiKey.value = config.gemini_api_key ? "******" : "";
+        if (cfgQwenKey) {
+            cfgQwenKey.value = config.qwen_api_key ? "******" : "";
+        }
+
+        // RAG 算法参数回显
+        cfgUseReranker.checked = config.use_reranker !== undefined ? config.use_reranker : false;
+        
+        const rThreshold = config.reranker_threshold !== undefined ? config.reranker_threshold : 0.40;
+        cfgRerankerThreshold.value = rThreshold;
+        valRerankerThreshold.textContent = parseFloat(rThreshold).toFixed(2);
+        
+        const searchK = config.search_k !== undefined ? config.search_k : 3;
+        cfgSearchK.value = searchK;
+        valSearchK.textContent = searchK;
+
+        // 异步从后端拉取长期记忆 Markdown
+        cfgMemoryContent.value = "正在加载记忆大脑中...";
+        try {
+            const memResponse = await fetch("/api/v1/memory", {
+                headers: { "X-API-Key": token }
+            });
+            if (memResponse.ok) {
+                const memData = await memResponse.json();
+                cfgMemoryContent.value = memData.content || "";
+            } else {
+                cfgMemoryContent.value = "加载长期记忆失败，请检查授权。";
+            }
+        } catch (e) {
+            console.warn("加载长期记忆异常:", e);
+            cfgMemoryContent.value = "未检测到后端，无法获取长期记忆。";
+        }
+
+        // 打开抽屉 (这是核心，绝对不能被任何网络/鉴权失败阻断)
+        settingsDrawer.classList.add("active");
+        document.body.classList.add("no-scroll");
     }
 
     function closeSettingsDrawer() {
@@ -855,7 +1446,8 @@ document.addEventListener("DOMContentLoaded", () => {
             trilium_base_url: cfgTriliumUrl.value.trim(),
             use_reranker: cfgUseReranker.checked,
             reranker_threshold: parseFloat(cfgRerankerThreshold.value),
-            search_k: parseInt(cfgSearchK.value)
+            search_k: parseInt(cfgSearchK.value),
+            response_mode: cfgResponseMode ? cfgResponseMode.value : "balanced"
         };
 
         // 如果用户在密钥栏写了非 "******" 的值，说明修改了，传输最新密钥
@@ -867,6 +1459,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const gKey = cfgGeminiKey.value.trim();
         if (gKey && gKey !== "******") payload.gemini_api_key = gKey;
+
+        if (cfgQwenKey) {
+            const qKey = cfgQwenKey.value.trim();
+            if (qKey && qKey !== "******") payload.qwen_api_key = qKey;
+        }
+
+        // 同步发送长期记忆保存请求 (并行，不阻塞模型热配置重载)
+        const memoryContent = cfgMemoryContent.value;
+        try {
+            fetch("/api/v1/memory", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": token
+                },
+                body: JSON.stringify({ content: memoryContent })
+            }).then(res => {
+                if (!res.ok) {
+                    showToast("智能体长期记忆保存落盘失败，请检查后端状态！", "error");
+                }
+            }).catch(err => {
+                console.error("长期记忆保存异常:", err);
+            });
+        } catch (e) {
+            console.error("保存记忆发生严重错误:", e);
+        }
 
         // 加载菊花 Loading
         btnSettingsSave.disabled = true;
@@ -902,4 +1520,11 @@ document.addEventListener("DOMContentLoaded", () => {
             spinner.style.display = "none";
         }
     }
+
+    // 为 E2E 自动化审计工具暴露测试挂载桩
+    window.__TEST_MOCKS__ = {
+        openPreviewModal: openPreviewModal,
+        renderSources: renderSources,
+        currentSourcesMap: currentSourcesMap
+    };
 });

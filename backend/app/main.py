@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from loguru import logger
 
 from app.api.endpoints import router as api_router
@@ -21,7 +21,7 @@ from app.core.container import container
 from app.core.security import mask_sensitive_data
 from app.llm.factory import LLMFactory
 from app.qa.cache import CacheManager
-from app.qa.memory import SessionManager
+from app.qa.memory import SessionManager, MemoryManager
 from app.retrieval.embeddings import EmbeddingAdapter
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import VectorStoreAdapter
@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
         # 1. 实例化缓存与原生内存管理 (100% 摆脱 LangChain 影子)
         container.cache_manager = CacheManager(config)
         container.session_manager = SessionManager()
+        container.memory_manager = MemoryManager(config)
 
         # 2. 异步初始化耗时大模型组件 (自适应极速探测)
         try:
@@ -157,10 +158,30 @@ app.mount("/assets", StaticFiles(directory=str(frontend_dir)), name="assets")
 
 @app.get("/")
 async def root():
-    """主入口直接返回单页面前端 APP，支持安全兜底检测."""
+    """主入口直接返回单页面前端 APP，防缓存、秒级热生效版本控制."""
+    import time
     index_path = frontend_dir / "index.html"
     if index_path.exists():
-        return FileResponse(str(index_path))
+        css_path = frontend_dir / "styles.css"
+        js_path = frontend_dir / "script.js"
+        
+        # 提取文件最后修改时间戳作为无损防缓存 version 标签
+        css_v = int(css_path.stat().st_mtime) if css_path.exists() else int(time.time())
+        js_v = int(js_path.stat().st_mtime) if js_path.exists() else int(time.time())
+        
+        html_content = index_path.read_text(encoding="utf-8")
+        # 动态追加防缓存版本号
+        html_content = html_content.replace("/assets/styles.css", f"/assets/styles.css?v={css_v}")
+        html_content = html_content.replace("/assets/script.js", f"/assets/script.js?v={js_v}")
+        
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     return {"message": "Trilium Agent Backend is running. Frontend index.html not found."}
 
 
@@ -214,17 +235,8 @@ async def health_check():
 
 
 def check_and_download_models():
-    """仅在纯本地离线模型驱动 (如 gpt4all) 时执行本地路径基础检测."""
-    try:
-        if config.llm_model_type.lower() == "gpt4all":
-            llm_model_path = Path(config.llm_model_path)
-            if not llm_model_path.exists():
-                logger.warning(f"本地离线模型不存在: {llm_model_path}，已配置，但在本版本中推荐使用 Ollama 或 API 接口。")
-                return False
-        return True
-    except Exception as e:
-        logger.error(f"检查本地模型路径出错: {e}")
-        return False
+    """模型配置预检（已废除过时的 GPT4All 本地 bin 检测，本地离线推荐使用 Ollama）."""
+    return True
 
 
 if __name__ == "__main__":

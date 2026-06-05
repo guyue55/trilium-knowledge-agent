@@ -21,10 +21,9 @@
         <div class="blur-blob blob-3"></div>
     </div>
     
-    <!-- 移动端侧边栏滑出磨砂半透明遮罩层 -->
-    <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
     <div class="app-container">
+        <!-- 移动端侧边栏滑出磨砂半透明遮罩层 -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
         <!-- 侧边栏 Sidebar -->
         <aside class="sidebar">
             <!-- 头部 Logo -->
@@ -187,71 +186,146 @@
                         <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
                         <option value="openai">OpenAI / 兼容第三方大模型</option>
                         <option value="qwen">阿里通义千问 (Qwen API)</option>
-                        <option value="gpt4all">GPT4All (全本地离线)</option>
                     </select>
                 </div>
 
                 <!-- 模型标识 / 物理路径 -->
                 <div class="form-item">
-                    <label>模型标识 / 物理路径 (LLM_MODEL_PATH)</label>
-                    <input type="text" id="cfg-llm-path" class="glass-input-field" placeholder="例如: qwen2:7b, gpt-3.5-turbo 等">
+                    <div class="form-label-row">
+                        <label>模型标识 / 物理路径 (LLM_MODEL_PATH)</label>
+                    </div>
+                    <div id="model-path-container" style="position: relative; width: 100%;">
+                        <input type="text" id="cfg-llm-path" class="glass-input-field" placeholder="例如: qwen2:7b, gpt-3.5-turbo 等">
+                        <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
+                            <!-- 动态填充 -->
+                        </select>
+                    </div>
                 </div>
 
                 <!-- API Base 配置 -->
-                <div class="form-item">
-                    <label>接口代理 Base 地址 (API_BASE)</label>
-                    <input type="text" id="cfg-api-base" class="glass-input-field" placeholder="默认官方地址，如: https://api.openai.com/v1">
+                <div id="wrapper-api-base" class="dynamic-form-group">
+                    <div class="form-item">
+                        <div class="form-label-row">
+                            <label>接口代理 Base 地址 (API_BASE)</label>
+                            <span id="llm-status-dot" class="live-status-dot" title="大模型网络探测中..."></span>
+                        </div>
+                        <input type="text" id="cfg-api-base" class="glass-input-field" placeholder="默认官方地址，如: https://api.openai.com/v1">
+                    </div>
                 </div>
 
                 <!-- Trilium Base URL 配置 -->
                 <div class="form-item">
-                    <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
+                    <div class="form-label-row">
+                        <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
+                        <span id="trilium-status-dot" class="live-status-dot" title="Trilium 连通性探测中..."></span>
+                    </div>
                     <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
                 </div>
 
                 <!-- 各模型密钥，按需填写 -->
-                <div class="form-section-title">安全密钥 (API Keys)</div>
-                
-                <div class="form-item">
-                    <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
-                    <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                </div>
+                <div id="api-keys-section" class="dynamic-form-section">
+                    <div class="form-section-title">安全密钥 (API Keys)</div>
+                    
+                    <div id="wrapper-openai-key" class="dynamic-form-group">
+                        <div class="form-item">
+                            <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
+                            <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                    </div>
 
-                <div class="form-item">
-                    <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
-                    <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                </div>
+                    <div id="wrapper-deepseek-key" class="dynamic-form-group">
+                        <div class="form-item">
+                            <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
+                            <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                    </div>
 
-                <div class="form-item">
-                    <label>Gemini 密钥 (GEMINI_API_KEY)</label>
-                    <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                    <div id="wrapper-gemini-key" class="dynamic-form-group">
+                        <div class="form-item">
+                            <label>Gemini 密钥 (GEMINI_API_KEY)</label>
+                            <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                    </div>
+
+                    <div id="wrapper-qwen-key" class="dynamic-form-group">
+                        <div class="form-item">
+                            <label>通义千问 密钥 (QWEN_API_KEY)</label>
+                            <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- RAG 参数配置 -->
                 <div class="form-section-title">算法参数 (RAG Pipeline Settings)</div>
 
-                <div class="form-item flex-row">
-                    <label for="cfg-use-reranker">启用 BGE 语义交叉重排器 (Reranker)</label>
-                    <div class="toggle-switch">
-                        <input type="checkbox" id="cfg-use-reranker">
-                        <label for="cfg-use-reranker"></label>
+                <!-- 智能体回答模式 (2026 前沿降维自适应设计) -->
+                <div class="form-item">
+                    <label>智能体回答模式 (Agent Answering Style)</label>
+                    <div class="style-cards-container">
+                        <div class="style-card" data-mode="strict">
+                            <div class="card-icon">🔒</div>
+                            <div class="card-meta">
+                                <div class="card-title">严谨纪实 (Strict)</div>
+                                <div class="card-desc">代码报错排查、精确配置。过滤高，温度 0.1 阻绝幻觉</div>
+                            </div>
+                        </div>
+                        <div class="style-card active" data-mode="balanced">
+                            <div class="card-icon">⚖️</div>
+                            <div class="card-meta">
+                                <div class="card-title">标准平衡 (Balanced)</div>
+                                <div class="card-desc">日常笔记整理、通用知识。精准过滤与合并，语义适中</div>
+                            </div>
+                        </div>
+                        <div class="style-card" data-mode="creative">
+                            <div class="card-icon">🎨</div>
+                            <div class="card-meta">
+                                <div class="card-title">脑暴合成 (Creative)</div>
+                                <div class="card-desc">撰写博客大纲、发散关联。宽容度高，激发跨域联想</div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="cfg-response-mode" value="balanced">
+                </div>
+
+                <!-- 隐藏的传统超参区 (点击可展开极客超参，降低普通用户认知负荷) -->
+                <div class="advanced-toggle-wrapper">
+                    <button type="button" id="btn-toggle-advanced" class="glass-toggle-btn">
+                        <span>显示高级控制台超参</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-icon" style="transition: transform 0.3s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                </div>
+
+                <div id="advanced-hyperparams" class="advanced-hyperparams">
+                    <div class="form-item flex-row">
+                        <label for="cfg-use-reranker">启用 BGE 语义交叉重排器 (Reranker)</label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="cfg-use-reranker">
+                            <label for="cfg-use-reranker"></label>
+                        </div>
+                    </div>
+
+                    <div class="form-item">
+                        <div class="slider-header">
+                            <label>BGE 重排分值相关阈值 (RERANKER_THRESHOLD)</label>
+                            <span id="val-reranker-threshold" class="slider-val">0.00</span>
+                        </div>
+                        <input type="range" id="cfg-reranker-threshold" min="0.0" max="1.0" step="0.05" class="glass-slider">
+                    </div>
+
+                    <div class="form-item">
+                        <div class="slider-header">
+                            <label>向量检索召回文档数 K (SEARCH_K)</label>
+                            <span id="val-search-k" class="slider-val">10</span>
+                        </div>
+                        <input type="range" id="cfg-search-k" min="1" max="20" step="1" class="glass-slider">
                     </div>
                 </div>
 
+                <!-- 长期记忆配置区 -->
+                <div class="form-section-title">长期记忆管理 (Agent Long-Term Memory)</div>
                 <div class="form-item">
-                    <div class="slider-header">
-                        <label>BGE 重排分值相关阈值 (RERANKER_THRESHOLD)</label>
-                        <span id="val-reranker-threshold" class="slider-val">0.00</span>
-                    </div>
-                    <input type="range" id="cfg-reranker-threshold" min="0.0" max="1.0" step="0.05" class="glass-slider">
-                </div>
-
-                <div class="form-item">
-                    <div class="slider-header">
-                        <label>向量检索召回文档数 K (SEARCH_K)</label>
-                        <span id="val-search-k" class="slider-val">10</span>
-                    </div>
-                    <input type="range" id="cfg-search-k" min="1" max="20" step="1" class="glass-slider">
+                    <label>长期记忆 Markdown 内容 (修改即时修正大模型认知)</label>
+                    <textarea id="cfg-memory-content" class="glass-textarea" rows="12" placeholder="正在加载记忆数据..."></textarea>
                 </div>
 
                 <!-- 抽屉保存按钮 -->

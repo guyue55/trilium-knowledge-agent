@@ -64,9 +64,19 @@ class LiteLLMAdapter(LLMAdapter):
 
     def generate(self, prompt: str) -> str:
         try:
+            # 根据 response_mode 映射自适应生成温度 (temperature)
+            response_mode = getattr(self.config, "response_mode", "balanced").lower()
+            if response_mode == "strict":
+                temperature = 0.1
+            elif response_mode == "creative":
+                temperature = 0.7
+            else: # balanced
+                temperature = 0.4
+
             kwargs = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key
@@ -81,10 +91,20 @@ class LiteLLMAdapter(LLMAdapter):
 
     async def agenerate_stream(self, prompt: str) -> AsyncGenerator[str, None]:
         try:
+            # 根据 response_mode 映射自适应生成温度 (temperature)
+            response_mode = getattr(self.config, "response_mode", "balanced").lower()
+            if response_mode == "strict":
+                temperature = 0.1
+            elif response_mode == "creative":
+                temperature = 0.7
+            else: # balanced
+                temperature = 0.4
+
             kwargs = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "stream": True
+                "stream": True,
+                "temperature": temperature,
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key

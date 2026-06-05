@@ -48,64 +48,6 @@ def download_embedding_model():
     return True
 
 
-def download_gpt4all_model():
-    """下载GPT4All模型."""
-    try:
-        import requests
-        from tqdm import tqdm
-
-        config = get_config()
-        model_path = Path(config.llm_model_path)
-
-        # 创建模型目录
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # 如果模型已存在，跳过下载
-        if model_path.exists():
-            print(f"模型文件已存在: {model_path}")
-            return True
-
-        # GPT4All模型下载URL (这里使用一个示例模型)
-        # 实际使用时应替换为真实的模型下载地址
-        model_url = "https://gpt4all.io/models/ggml-gpt4all-j-v1.3-groovy.bin"
-
-        print("开始下载GPT4All模型...")
-        print(f"URL: {model_url}")
-        print(f"保存到: {model_path}")
-
-        # 下载文件
-        response = requests.get(model_url, stream=True)
-        response.raise_for_status()
-
-        # 获取文件大小
-        total_size = int(response.headers.get("content-length", 0))
-
-        # 保存文件并显示进度条
-        with (
-            open(model_path, "wb") as f,
-            tqdm(
-                desc=model_path.name,
-                total=total_size,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as pbar,
-        ):
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                pbar.update(len(chunk))
-
-        print("GPT4All模型下载完成!")
-        return True
-
-    except Exception as e:
-        print(f"下载GPT4All模型时出错: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
-
-
 def main():
     """主函数."""
     print("开始下载所需模型...")
@@ -114,12 +56,6 @@ def main():
     print("\n=== 下载嵌入模型 ===")
     if not download_embedding_model():
         print("嵌入模型下载失败!")
-        return False
-
-    # 下载GPT4All模型
-    print("\n=== 下载GPT4All模型 ===")
-    if not download_gpt4all_model():
-        print("GPT4All模型下载失败!")
         return False
 
     print("\n所有模型下载完成!")

@@ -10,7 +10,7 @@ from loguru import logger
 from app.core.config import Config, get_config
 from app.llm.base import LLMAdapter
 from app.qa.cache import CacheManager
-from app.qa.memory import SessionManager
+from app.qa.memory import SessionManager, MemoryManager
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import VectorStoreAdapter
 
@@ -24,6 +24,7 @@ class AppContainer:
         self.reranker: Optional[Reranker] = None
         self.cache_manager: Optional[CacheManager] = None
         self.session_manager: Optional[SessionManager] = None
+        self.memory_manager: Optional[MemoryManager] = None
         self.init_errors: list[str] = []
 
     def set_error(self, error_msg: str):
