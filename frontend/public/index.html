@@ -177,40 +177,88 @@
             </div>
             
             <form id="settings-form" class="drawer-body">
-                <!-- 模型类型选择 -->
+                <!-- 模型选择卡片网格 -->
                 <div class="form-item">
-                    <label>大模型驱动类型 (LLM_MODEL_TYPE)</label>
-                    <select id="cfg-llm-type" class="glass-select">
+                    <div class="form-label-row">
+                        <label>大模型驱动类型 (LLM_MODEL_TYPE)</label>
+                        <span id="llm-status-dot" class="live-status-dot" title="大模型网络探测中..."></span>
+                    </div>
+                    <div class="provider-grid">
+                        <div class="provider-card active" data-provider="ollama">
+                            <div class="provider-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                                </svg>
+                            </div>
+                            <div class="provider-meta">
+                                <div class="provider-title">Ollama</div>
+                                <div class="provider-desc">本地极速 / 隐私保护</div>
+                            </div>
+                            <div class="provider-badge">Local</div>
+                        </div>
+                        <div class="provider-card" data-provider="openai">
+                            <div class="provider-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                </svg>
+                            </div>
+                            <div class="provider-meta">
+                                <div class="provider-title">OpenAI</div>
+                                <div class="provider-desc">行业标杆 / 兼容第三方</div>
+                            </div>
+                            <div class="provider-badge">Cloud</div>
+                        </div>
+                        <div class="provider-card" data-provider="deepseek">
+                            <div class="provider-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                </svg>
+                            </div>
+                            <div class="provider-meta">
+                                <div class="provider-title">DeepSeek</div>
+                                <div class="provider-desc">极速推理 / 性价比首选</div>
+                            </div>
+                            <div class="provider-badge">Hot</div>
+                        </div>
+                        <div class="provider-card" data-provider="gemini">
+                            <div class="provider-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"></polygon>
+                                </svg>
+                            </div>
+                            <div class="provider-meta">
+                                <div class="provider-title">Gemini</div>
+                                <div class="provider-desc">谷歌多模态 / 闪电响应</div>
+                            </div>
+                            <div class="provider-badge">Google</div>
+                        </div>
+                        <div class="provider-card" data-provider="qwen">
+                            <div class="provider-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                </svg>
+                            </div>
+                            <div class="provider-meta">
+                                <div class="provider-title">通义千问</div>
+                                <div class="provider-desc">阿里 Qwen / 极致流畅</div>
+                            </div>
+                            <div class="provider-badge">Alibaba</div>
+                        </div>
+                    </div>
+                    <!-- 隐藏的传统下拉与输入，维持向后兼容与原有探测逻辑 -->
+                    <select id="cfg-llm-type" class="glass-select" style="display: none;">
                         <option value="ollama">Ollama (本地私有化)</option>
                         <option value="deepseek">DeepSeek (深度求索极速 API)</option>
                         <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
                         <option value="openai">OpenAI / 兼容第三方大模型</option>
                         <option value="qwen">阿里通义千问 (Qwen API)</option>
                     </select>
-                </div>
-
-                <!-- 模型标识 / 物理路径 -->
-                <div class="form-item">
-                    <div class="form-label-row">
-                        <label>模型标识 / 物理路径 (LLM_MODEL_PATH)</label>
-                    </div>
-                    <div id="model-path-container" style="position: relative; width: 100%;">
-                        <input type="text" id="cfg-llm-path" class="glass-input-field" placeholder="例如: qwen2:7b, gpt-3.5-turbo 等">
-                        <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
-                            <!-- 动态填充 -->
-                        </select>
-                    </div>
-                </div>
-
-                <!-- API Base 配置 -->
-                <div id="wrapper-api-base" class="dynamic-form-group">
-                    <div class="form-item">
-                        <div class="form-label-row">
-                            <label>接口代理 Base 地址 (API_BASE)</label>
-                            <span id="llm-status-dot" class="live-status-dot" title="大模型网络探测中..."></span>
-                        </div>
-                        <input type="text" id="cfg-api-base" class="glass-input-field" placeholder="默认官方地址，如: https://api.openai.com/v1">
-                    </div>
+                    <input type="hidden" id="cfg-llm-path" value="">
+                    <input type="hidden" id="cfg-api-base" value="">
                 </div>
 
                 <!-- Trilium Base URL 配置 -->
@@ -222,36 +270,82 @@
                     <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
                 </div>
 
-                <!-- 各模型密钥，按需填写 -->
-                <div id="api-keys-section" class="dynamic-form-section">
-                    <div class="form-section-title">安全密钥 (API Keys)</div>
-                    
-                    <div id="wrapper-openai-key" class="dynamic-form-group">
-                        <div class="form-item">
-                            <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
-                            <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                <!-- 各提供商专属参数字段群组 (自适应渐进折叠) -->
+                
+                <!-- Ollama 专属配置 -->
+                <div id="fields-ollama" class="provider-fields-group">
+                    <div class="form-item">
+                        <label>Ollama 本地服务地址</label>
+                        <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
+                    </div>
+                    <div class="form-item">
+                        <label>模型标识 (LLM_MODEL_PATH)</label>
+                        <div id="model-path-container" style="position: relative; width: 100%;">
+                            <input type="text" id="cfg-ollama-model" class="glass-input-field" placeholder="例如: qwen2.5:7b, llama3 等">
+                            <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
+                                <!-- 动态填充 -->
+                            </select>
                         </div>
                     </div>
+                </div>
 
-                    <div id="wrapper-deepseek-key" class="dynamic-form-group">
-                        <div class="form-item">
-                            <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
-                            <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                        </div>
+                <!-- OpenAI 专属配置 -->
+                <div id="fields-openai" class="provider-fields-group">
+                    <div class="form-item">
+                        <label>OpenAI 代理 Base URL</label>
+                        <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址: https://api.openai.com/v1">
                     </div>
-
-                    <div id="wrapper-gemini-key" class="dynamic-form-group">
-                        <div class="form-item">
-                            <label>Gemini 密钥 (GEMINI_API_KEY)</label>
-                            <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                        </div>
+                    <div class="form-item">
+                        <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
+                        <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
                     </div>
+                    <div class="form-item">
+                        <label>OpenAI 模型名称 (OPENAI_MODEL_NAME)</label>
+                        <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o">
+                    </div>
+                </div>
 
-                    <div id="wrapper-qwen-key" class="dynamic-form-group">
-                        <div class="form-item">
-                            <label>通义千问 密钥 (QWEN_API_KEY)</label>
-                            <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                        </div>
+                <!-- DeepSeek 专属配置 -->
+                <div id="fields-deepseek" class="provider-fields-group">
+                    <div class="form-item">
+                        <label>DeepSeek 代理 Base URL</label>
+                        <input type="text" id="cfg-deepseek-base" class="glass-input-field" placeholder="默认官方地址: https://api.deepseek.com/v1">
+                    </div>
+                    <div class="form-item">
+                        <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
+                        <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                    </div>
+                    <div class="form-item">
+                        <label>DeepSeek 模型名称 (DEEPSEEK_MODEL_NAME)</label>
+                        <input type="text" id="cfg-deepseek-model" class="glass-input-field" placeholder="例如: deepseek-chat, deepseek-coder">
+                    </div>
+                </div>
+
+                <!-- Google Gemini 专属配置 -->
+                <div id="fields-gemini" class="provider-fields-group">
+                    <div class="form-item">
+                        <label>Gemini 密钥 (GEMINI_API_KEY)</label>
+                        <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                    </div>
+                    <div class="form-item">
+                        <label>Gemini 模型名称 (GEMINI_MODEL_NAME)</label>
+                        <input type="text" id="cfg-gemini-model" class="glass-input-field" placeholder="例如: gemini-2.5-flash, gemini-1.5-pro">
+                    </div>
+                </div>
+
+                <!-- 阿里通义千问 专属配置 -->
+                <div id="fields-qwen" class="provider-fields-group">
+                    <div class="form-item">
+                        <label>通义千问 代理 Base URL</label>
+                        <input type="text" id="cfg-qwen-base" class="glass-input-field" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1">
+                    </div>
+                    <div class="form-item">
+                        <label>通义千问 密钥 (QWEN_API_KEY)</label>
+                        <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                    </div>
+                    <div class="form-item">
+                        <label>Qwen 模型名称 (QWEN_MODEL_NAME)</label>
+                        <input type="text" id="cfg-qwen-model" class="glass-input-field" placeholder="例如: qwen-turbo, qwen-plus">
                     </div>
                 </div>
 
