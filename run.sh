@@ -43,11 +43,14 @@ if [ "$1" == "docker" ] || [ "$1" == "docker-backend" ]; then
     fi
     echo -e "${GREEN}✅ Docker 引擎与 Compose 服务状态就绪。${NC}"
 
-    # 1. 检测并生成 .env 配置文件
+    # 1. 检测并生成 .env 配置文件 (一键统一生成于根目录并同步向下兼容 backend/.env)
+    if [ ! -f ".env" ]; then
+        echo -e "${YELLOW}⚠️  检测到项目根目录未配置 .env 文件，正在从 .env.example 自动生成默认配置...${NC}"
+        cp .env.example .env
+        echo -e "${GREEN}✅ 已在项目根目录自动生成默认 .env 配置。${NC}"
+    fi
     if [ ! -f "backend/.env" ]; then
-        echo -e "${YELLOW}⚠️  检测到后端未配置 .env 文件，正在从 .env.example 自动生成默认配置...${NC}"
         cp .env.example backend/.env
-        echo -e "${GREEN}✅ 已自动生成默认配置。${NC}"
     fi
 
     # 2. 选择性启动 Ollama 服务容器
@@ -121,7 +124,10 @@ async def run_smoke():
     from app.llm.factory import LLMFactory
     llm = await asyncio.to_thread(LLMFactory.create_llm, config)
     rs = RetrievalService(config, vs, rk)
-    qa = QAService(llm, rs, None, None)
+    from app.qa.memory import SessionManager, MemoryManager
+    sm = SessionManager()
+    mm = MemoryManager(config)
+    qa = QAService(llm, rs, None, sm, mm)
     
     query = 'MySQL高负载下innodb缓存该怎么配？'
     print(f'\\033[0;34m[提问] : {query}\\033[0m')
@@ -153,13 +159,17 @@ fi
 # 启动模式 2：宿主机 Python 环境本地轻量运行 (Normal Local Mode)
 # ==============================================================================
 
-# 1. 检查 backend/.env 文件
+# 1. 检查并同步生成 .env 配置文件 (保持本地运行与容器运行高度一致)
+if [ ! -f ".env" ]; then
+    echo -e "${YELLOW}⚠️  检测到项目根目录未配置 .env 文件，正在从 .env.example 自动生成默认配置...${NC}"
+    cp .env.example .env
+    echo -e "${GREEN}✅ 已自动在项目根目录生成默认模板。${NC}"
+fi
 if [ ! -f "backend/.env" ]; then
-    echo -e "${YELLOW}⚠️  检测到后端未配置 .env 文件，正在从 .env.example 自动生成默认配置...${NC}"
     cp .env.example backend/.env
     echo -e "${GREEN}✅ 已自动在 backend/.env 生成默认模板，请在需要时手动修改其中的 TRILIUM_TOKEN 等字段。${NC}"
 else
-    echo -e "${GREEN}✅ 检测到后端 .env 配置文件已就绪。${NC}"
+    echo -e "${GREEN}✅ 检测到本地配置文件已就绪。${NC}"
 fi
 
 # 2. 提供一键检查并安装依赖提示

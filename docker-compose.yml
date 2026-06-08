@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   ollama:
-    image: docker.m.daocloud.io/ollama/ollama:latest
+    image: ollama/ollama:latest
     container_name: ollama
     profiles:
       - ollama
@@ -14,21 +14,24 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: trilium-agent-backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env  # [统一环境配置] 自动从根目录下的 .env 中加载完整的环境变量与模型 API Token 传入容器
     volumes:
+      - ./data:/app/data  # [持久化存储] 存放知识库、Chroma向量索引和本地离线模型文件 (一键生产级部署必备)
+      # ------------------------------------------------------------------------
+      # 💡 提示：以下挂载卷为【本地热开发调试挂载卷】。在生产级独立部署时，您可以完全注释掉它们，
+      # 因为所有前端静态页面、后端代码、数据治理脚本已在构建阶段 100% 完整打包到镜像内部。
+      # ------------------------------------------------------------------------
       - ./backend:/app
-      - ./data:/app/data
       - ./scripts:/app/scripts
       - ./frontend:/frontend
     environment:
       - PYTHONPATH=/app
-      - LLM_MODEL_TYPE=ollama
-      - LLM_MODEL_PATH=qwen2.5:1.5b
-      - OPENAI_API_BASE=http://ollama:11434
-      - HF_ENDPOINT=https://hf-mirror.com
+      - OPENAI_API_BASE=http://ollama:11434  # 强制容器内 RAG 内部网络路由走 ollama 容器专属地址
     restart: unless-stopped
 

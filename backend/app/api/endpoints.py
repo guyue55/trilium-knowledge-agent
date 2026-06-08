@@ -192,7 +192,8 @@ def update_env_file(payload: dict[str, Any]):
                 if isinstance(val, bool):
                     updates[env_key] = "true" if val else "false"
                 else:
-                    updates[env_key] = str(val)
+                    # 防御换行符注入漏洞，彻底剔除 \r 和 \n
+                    updates[env_key] = str(val).replace("\r", "").replace("\n", "")
                     
         updated_keys = set()
         for i, line in enumerate(lines):
@@ -269,8 +270,13 @@ async def get_sessions(
 async def get_config_api(
     _token: str = Depends(verify_api_key)
 ) -> dict[str, Any]:
-    """获取当前的非敏感配置参数，支持前端表单回显."""
+    """获取当前的非敏感配置参数，支持前端表单回显，并返回非致命预警信息."""
     config = container.config
+    try:
+        config.validate_complex_rules()
+    except Exception as e:
+        logger.warning(f"获取配置时的校验警告或非致命错误: {e}")
+        
     return {
         "llm_model_type": config.llm_model_type,
         "llm_model_path": config.llm_model_path,
@@ -288,7 +294,8 @@ async def get_config_api(
         "openai_api_key": "******" if config.openai_api_key.strip() else "",
         "deepseek_api_key": "******" if config.deepseek_api_key.strip() else "",
         "gemini_api_key": "******" if config.gemini_api_key.strip() else "",
-        "qwen_api_key": "******" if config.qwen_api_key.strip() else ""
+        "qwen_api_key": "******" if config.qwen_api_key.strip() else "",
+        "warnings": getattr(config, "_warnings", [])
     }
 
 
@@ -297,65 +304,69 @@ async def update_config_api(
     payload: dict[str, Any],
     _token: str = Depends(verify_api_key)
 ) -> dict[str, Any]:
-    """更新配置参数，热重载内存中的大模型，并持久化落盘."""
+    """更新配置参数，原子校验，热重载内存中的大模型，并持久化落盘."""
     config = container.config
+    
+    # 1. 字典快照合并与清洗
+    current_data = config.model_dump()
+    update_data = {}
     
     if "llm_model_type" in payload:
         val = str(payload["llm_model_type"]).strip().lower()
         if val not in ["qwen", "openai", "ollama", "deepseek", "gemini"]:
             raise HTTPException(status_code=400, detail=f"不支持的大模型类型: {val}")
-        config.llm_model_type = val
+        update_data["llm_model_type"] = val
         
     if "llm_model_path" in payload:
-        config.llm_model_path = str(payload["llm_model_path"]).strip()
+        update_data["llm_model_path"] = str(payload["llm_model_path"]).strip()
         
     if "openai_api_base" in payload:
-        config.openai_api_base = str(payload["openai_api_base"]).strip()
+        update_data["openai_api_base"] = str(payload["openai_api_base"]).strip()
         
     if "openai_model_name" in payload:
-        config.openai_model_name = str(payload["openai_model_name"]).strip()
+        update_data["openai_model_name"] = str(payload["openai_model_name"]).strip()
         
     if "openai_api_key" in payload:
         key = str(payload["openai_api_key"]).strip()
         if key and not key.startswith("******"):
-            config.openai_api_key = key
+            update_data["openai_api_key"] = key
             
     if "deepseek_api_base" in payload:
-        config.deepseek_api_base = str(payload["deepseek_api_base"]).strip()
+        update_data["deepseek_api_base"] = str(payload["deepseek_api_base"]).strip()
         
     if "deepseek_model_name" in payload:
-        config.deepseek_model_name = str(payload["deepseek_model_name"]).strip()
+        update_data["deepseek_model_name"] = str(payload["deepseek_model_name"]).strip()
         
     if "deepseek_api_key" in payload:
         key = str(payload["deepseek_api_key"]).strip()
         if key and not key.startswith("******"):
-            config.deepseek_api_key = key
+            update_data["deepseek_api_key"] = key
             
     if "gemini_model_name" in payload:
-        config.gemini_model_name = str(payload["gemini_model_name"]).strip()
+        update_data["gemini_model_name"] = str(payload["gemini_model_name"]).strip()
         
     if "gemini_api_key" in payload:
         key = str(payload["gemini_api_key"]).strip()
         if key and not key.startswith("******"):
-            config.gemini_api_key = key
+            update_data["gemini_api_key"] = key
 
     if "qwen_api_key" in payload:
         key = str(payload["qwen_api_key"]).strip()
         if key and not key.startswith("******"):
-            config.qwen_api_key = key
+            update_data["qwen_api_key"] = key
 
     if "trilium_base_url" in payload:
-        config.trilium_base_url = str(payload["trilium_base_url"]).strip()
+        update_data["trilium_base_url"] = str(payload["trilium_base_url"]).strip()
             
     if "use_reranker" in payload:
-        config.use_reranker = bool(payload["use_reranker"])
+        update_data["use_reranker"] = bool(payload["use_reranker"])
         
     if "reranker_threshold" in payload:
         try:
             val = float(payload["reranker_threshold"])
             if not (0.0 <= val <= 1.0):
                 raise ValueError()
-            config.reranker_threshold = val
+            update_data["reranker_threshold"] = val
         except Exception:
             raise HTTPException(status_code=400, detail="reranker_threshold 必须是 0.0 ~ 1.0 之间的浮点数")
         
@@ -364,7 +375,7 @@ async def update_config_api(
             val = int(payload["search_k"])
             if not (1 <= val <= 20):
                 raise ValueError()
-            config.search_k = val
+            update_data["search_k"] = val
         except Exception:
             raise HTTPException(status_code=400, detail="search_k 必须是 1 ~ 20 之间的整数")
 
@@ -372,32 +383,43 @@ async def update_config_api(
         val = str(payload["response_mode"]).strip().lower()
         if val not in ["strict", "balanced", "creative"]:
             raise HTTPException(status_code=400, detail=f"不支持的回答模式: {val}")
-        config.response_mode = val
+        update_data["response_mode"] = val
 
-    # 验证新配置
+    # 2. 构造临时对象并进行全量校验 (Copy-on-Validate)
+    merged_data = {**current_data, **update_data}
     try:
-        config.validate_complex_rules()
+        temp_config = Config(**merged_data)
+        temp_config.validate_complex_rules()
     except Exception as e:
+        logger.warning(f"原子校验失败，不污染全局配置单例: {e}")
         raise HTTPException(status_code=400, detail=f"新配置校验未通过: {str(e)}")
 
-    # 动态热重载 LLM Adapter
+    # 3. 校验全部通过后，原子更新到全局单例
+    config.__dict__.update(temp_config.__dict__)
+    config._warnings = getattr(temp_config, "_warnings", [])
+
+    # 4. 动态热重载 LLM Adapter (Offload 驱动构建，消除主线程同步网络与 CPU 阻塞)
     try:
+        import asyncio
         from app.llm.factory import LLMFactory
-        new_adapter = LLMFactory.create_llm(config)
+        new_adapter = await asyncio.to_thread(LLMFactory.create_llm, config)
         container.llm_adapter = new_adapter
         logger.info("配置修改成功，全局 LLM 适配器驱动已内存热重装！")
     except Exception as e:
         logger.error(f"热重载 LLM 适配器驱动异常: {e}")
         raise HTTPException(status_code=500, detail=f"大模型重载重连失败: {str(e)}")
 
-    # 同步落盘
+    # 5. 同步落盘
     try:
-        import asyncio
         await asyncio.to_thread(update_env_file, payload)
     except Exception as e:
         logger.warning(f"配置落盘失败: {e}")
         
-    return {"status": "success", "message": "配置更新成功，服务已被实时动态重载！"}
+    return {
+        "status": "success",
+        "message": "配置更新成功，服务已被实时动态重载！",
+        "warnings": getattr(config, "_warnings", [])
+    }
 
 
 @router.get("/config/detect_ollama")

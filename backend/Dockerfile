@@ -1,5 +1,5 @@
-# 使用 Python 3.10-slim 镜像 (通过高速代理镜像源拉取)
-FROM docker.m.daocloud.io/library/python:3.10-slim
+# 使用官方 Python 3.10-slim 镜像
+FROM python:3.10-slim
 
 WORKDIR /app
 
@@ -14,11 +14,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     HF_ENDPOINT=https://hf-mirror.com
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制后端代码
-COPY . .
+# 复制后端、前端及系统工具脚本，实现高度内建与自给自足 (生产部署无需任何开发 volumes 挂载)
+COPY backend/ /app/
+COPY frontend/ /frontend/
+COPY scripts/ /app/scripts/
 
 # 创建必要的数据目录
 RUN mkdir -p data/models data/vector_db data/trilium

@@ -140,15 +140,17 @@ class SessionManager:
             real_file_path = self.sessions_dir / f"{session_id}.json"
             
             # 确保目录存在
-            self.sessions_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(self.sessions_dir.mkdir, parents=True, exist_ok=True)
             
-            tmp_file_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            json_str = json.dumps(data, ensure_ascii=False, indent=2)
+            await asyncio.to_thread(tmp_file_path.write_text, json_str, encoding="utf-8")
             
             # 原子替换 (POSIX replace)
-            os.replace(tmp_file_path, real_file_path)
+            await asyncio.to_thread(os.replace, tmp_file_path, real_file_path)
             
             # ⚡ 写入成功后，立刻对当前会话的元数据在内存中完成刷新，记录最新修改时间
-            mtime = real_file_path.stat().st_mtime
+            stat_res = await asyncio.to_thread(real_file_path.stat)
+            mtime = stat_res.st_mtime
             first_msg = self.sessions[session_id][0].content if self.sessions.get(session_id) else "空会话"
             title = first_msg[:15] + "..." if len(first_msg) > 15 else first_msg
             self._sessions_metadata[session_id] = {
@@ -400,11 +402,22 @@ tags: [system-memory, preference, environment]
     async def get_memory(self) -> str:
         """从微秒级内存缓存直接读取，保障极致的 RAG 响应流速 (0 I/O 开销)；若检测到外部篡改或物理修改，自动刷新自愈缓存. """
         try:
-            if self.memory_file_path.exists():
-                current_mtime = self.memory_file_path.stat().st_mtime
-                if current_mtime > self._last_mtime:
-                    logger.warning("🧠 检测到物理记忆文件在外部被直接修改，热缓存正在自动重载自愈...")
-                    self._load_memory_to_cache()
+            # 投递文件 exists 检测至线程池
+            exists = await asyncio.to_thread(self.memory_file_path.exists)
+            if exists:
+                # 1. 第一次快速无锁检测时间戳
+                stat_res = await asyncio.to_thread(self.memory_file_path.stat)
+                mtime_val = stat_res.st_mtime
+                if mtime_val > self._last_mtime:
+                    # 2. 仅在需要重载时竞争锁
+                    async with self._lock:
+                        # 3. 第二次双重加锁检测，防并发击穿
+                        if mtime_val > self._last_mtime:
+                            logger.warning("🧠 检测到物理记忆文件在外部被直接修改，热缓存正在自动重载自愈...")
+                            # 4. Offload 读盘
+                            content = await asyncio.to_thread(self.memory_file_path.read_text, encoding="utf-8")
+                            self._memory_cache = content
+                            self._last_mtime = mtime_val
         except Exception as e:
             logger.error(f"检查物理记忆文件修改时间失败: {e}")
 
@@ -427,11 +440,12 @@ tags: [system-memory, preference, environment]
 
                 # 2. 写入同目录临时文件
                 tmp_file_path = self.memory_file_path.with_suffix(".md.tmp")
-                tmp_file_path.write_text(content, encoding="utf-8")
+                await asyncio.to_thread(tmp_file_path.write_text, content, encoding="utf-8")
                 
                 # 3. 操作系统级原子覆盖 (POSIX 级 replace，杜绝对多进程、异常崩溃下的损坏隐患)
-                os.replace(tmp_file_path, self.memory_file_path)
-                self._last_mtime = self.memory_file_path.stat().st_mtime
+                await asyncio.to_thread(os.replace, tmp_file_path, self.memory_file_path)
+                stat_res = await asyncio.to_thread(self.memory_file_path.stat)
+                self._last_mtime = stat_res.st_mtime
                 
                 # 4. 同步刷新常驻热缓存，保障数据完全一致性
                 self._memory_cache = content
@@ -441,9 +455,10 @@ tags: [system-memory, preference, environment]
                 logger.error(f"原子物理落盘长期记忆发生异常: {e}")
                 # 专家降级防线：如果由于某种原因原子写入失败，降级为直写
                 try:
-                    self.memory_file_path.write_text(content, encoding="utf-8")
+                    await asyncio.to_thread(self.memory_file_path.write_text, content, encoding="utf-8")
                     self._memory_cache = content
-                    self._last_mtime = self.memory_file_path.stat().st_mtime
+                    stat_res = await asyncio.to_thread(self.memory_file_path.stat)
+                    self._last_mtime = stat_res.st_mtime
                     logger.warning("💾 原子物理写入遭遇异常，降级直写模式覆写成功。")
                     return True
                 except Exception as ex:

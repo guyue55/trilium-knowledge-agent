@@ -106,6 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const previewNoteId = document.getElementById("preview-note-id");
     const previewBody = document.getElementById("preview-body");
 
+    // 提前初始化防抖连接探测函数，根治 DOMContentLoaded 早期绑定时的 ES6 ReferenceError 初始化顺序 Bug
+    const debouncedTestTrilium = debounce(testTriliumConnection, 500);
+    const debouncedTestLlm = debounce(testLlmConnection, 500);
+
     // ==========================================
     // 2. 初始化流程
     // ==========================================
@@ -131,97 +135,120 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     
     // 主题切换
-    btnThemeToggle.addEventListener("click", toggleTheme);
+    if (btnThemeToggle) {
+        btnThemeToggle.addEventListener("click", toggleTheme);
+    }
 
     // 移动端自适应侧边栏控制事件绑定
-    btnSidebarToggle.addEventListener("click", openSidebar);
-    btnSidebarClose.addEventListener("click", closeSidebar);
-    sidebarOverlay.addEventListener("click", closeSidebar);
+    if (btnSidebarToggle) btnSidebarToggle.addEventListener("click", openSidebar);
+    if (btnSidebarClose) btnSidebarClose.addEventListener("click", closeSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener("click", closeSidebar);
 
     function openSidebar() {
-        sidebar.classList.add("active");
-        sidebarOverlay.classList.add("active");
+        if (sidebar) sidebar.classList.add("active");
+        if (sidebarOverlay) sidebarOverlay.classList.add("active");
         document.body.classList.add("no-scroll");
     }
 
     function closeSidebar() {
-        sidebar.classList.remove("active");
-        sidebarOverlay.classList.remove("active");
+        if (sidebar) sidebar.classList.remove("active");
+        if (sidebarOverlay) sidebarOverlay.classList.remove("active");
         // 只有当没有其他活跃的 Modal 或 Drawer 时才安全地移除 no-scroll 保护
-        if (!settingsDrawer.classList.contains("active") && !previewModal.classList.contains("active")) {
+        const settingsActive = settingsDrawer ? settingsDrawer.classList.contains("active") : false;
+        const previewActive = previewModal ? previewModal.classList.contains("active") : false;
+        if (!settingsActive && !previewActive) {
             document.body.classList.remove("no-scroll");
         }
     }
 
     // 发送消息
-    btnSend.addEventListener("click", handleSend);
-    chatInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    });
+    if (btnSend) btnSend.addEventListener("click", handleSend);
+    if (chatInput) {
+        chatInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
 
-    // 输入框自动撑高
-    chatInput.addEventListener("input", () => {
-        chatInput.style.height = "auto";
-        chatInput.style.height = (chatInput.scrollHeight) + "px";
-    });
+        // 输入框自动撑高
+        chatInput.addEventListener("input", () => {
+            chatInput.style.height = "auto";
+            chatInput.style.height = (chatInput.scrollHeight) + "px";
+        });
+    }
 
     // 清除当前会话上下文
-    btnClearCurrent.addEventListener("click", clearCurrentSessionContext);
+    if (btnClearCurrent) btnClearCurrent.addEventListener("click", clearCurrentSessionContext);
 
-    // 凭证变动本地自动保存
-    apiKeyInput.addEventListener("input", () => {
-        localStorage.setItem("trilium_agent_api_key", apiKeyInput.value.trim());
-    });
+    // 凭证变动本地自动保存，加入主动聚焦守护与双事件监听，彻底杜绝浏览器密码管理器/表单自动填充在首屏加载时清空或覆盖已保存凭证的缺陷
+    if (apiKeyInput) {
+        const saveApiKey = () => {
+            // 只有当用户正在主动聚焦或与输入框交互时，才允许同步写回 localStorage，防御后台静默重置
+            if (document.activeElement === apiKeyInput) {
+                localStorage.setItem("trilium_agent_api_key", apiKeyInput.value.trim());
+            }
+        };
+        apiKeyInput.addEventListener("input", saveApiKey);
+        apiKeyInput.addEventListener("change", saveApiKey);
+    }
 
     // 触发知识库同步
-    btnSync.addEventListener("click", triggerKbSync);
+    if (btnSync) btnSync.addEventListener("click", triggerKbSync);
 
     // 新建会话
-    btnNewChat.addEventListener("click", handleNewChat);
+    if (btnNewChat) btnNewChat.addEventListener("click", handleNewChat);
 
     // 抽屉展开/收起
-    btnSettingsOpen.addEventListener("click", openSettingsDrawer);
-    btnSettingsClose.addEventListener("click", closeSettingsDrawer);
-    btnSettingsCancel.addEventListener("click", closeSettingsDrawer);
-    settingsDrawer.addEventListener("click", (e) => {
-        if (e.target === settingsDrawer) closeSettingsDrawer();
-    });
+    if (btnSettingsOpen) btnSettingsOpen.addEventListener("click", openSettingsDrawer);
+    if (btnSettingsClose) btnSettingsClose.addEventListener("click", closeSettingsDrawer);
+    if (btnSettingsCancel) btnSettingsCancel.addEventListener("click", closeSettingsDrawer);
+    if (settingsDrawer) {
+        settingsDrawer.addEventListener("click", (e) => {
+            if (e.target === settingsDrawer) closeSettingsDrawer();
+        });
+    }
 
     // 抽屉滑动条数值映射
-    cfgRerankerThreshold.addEventListener("input", (e) => {
-        valRerankerThreshold.textContent = parseFloat(e.target.value).toFixed(2);
-    });
-    cfgSearchK.addEventListener("input", (e) => {
-        valSearchK.textContent = e.target.value;
-    });
+    if (cfgRerankerThreshold) {
+        cfgRerankerThreshold.addEventListener("input", (e) => {
+            if (valRerankerThreshold) valRerankerThreshold.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+    }
+    if (cfgSearchK) {
+        cfgSearchK.addEventListener("input", (e) => {
+            if (valSearchK) valSearchK.textContent = e.target.value;
+        });
+    }
 
     // 抽屉保存
-    btnSettingsSave.addEventListener("click", saveSettings);
+    if (btnSettingsSave) btnSettingsSave.addEventListener("click", saveSettings);
 
     // 2026 Premium 侧边栏 Tab 栏点击切换事件
     const drawerTabs = document.querySelectorAll(".drawer-tab");
     const tabContents = document.querySelectorAll(".tab-content");
-    drawerTabs.forEach(tab => {
-        tab.addEventListener("click", () => {
-            const targetTab = tab.getAttribute("data-tab");
-            
-            // 切换 Tab 头激活态
-            drawerTabs.forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            
-            // 切换 Tab 内容展示
-            tabContents.forEach(content => {
-                if (content.id === `tab-${targetTab}`) {
-                    content.classList.add("active");
-                } else {
-                    content.classList.remove("active");
+    if (drawerTabs && drawerTabs.length > 0) {
+        drawerTabs.forEach(tab => {
+            tab.addEventListener("click", () => {
+                const targetTab = tab.getAttribute("data-tab");
+                
+                // 切换 Tab 头激活态
+                drawerTabs.forEach(t => t.classList.remove("active"));
+                tab.classList.add("active");
+                
+                // 切换 Tab 内容展示
+                if (tabContents && tabContents.length > 0) {
+                    tabContents.forEach(content => {
+                        if (content.id === `tab-${targetTab}`) {
+                            content.classList.add("active");
+                        } else {
+                            content.classList.remove("active");
+                        }
+                    });
                 }
             });
         });
-    });
+    }
 
     // ==========================================
     // 3.5 2026 智能化自适应与实时验证事件绑定
@@ -292,6 +319,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 syncActiveProviderValuesToHidden();
                 if (typeof debouncedTestLlm === "function") debouncedTestLlm();
                 if (typeof handleLlmTypeChange === "function") handleLlmTypeChange();
+                
+                // 切换大模型提供商时，实时触发客户端表单校验
+                validateForm();
             });
         });
     }
@@ -380,11 +410,219 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 弹窗关闭
-    btnModalClose.addEventListener("click", closePreviewModal);
-    btnModalCloseFooter.addEventListener("click", closePreviewModal);
-    previewModal.addEventListener("click", (e) => {
-        if (e.target === previewModal) closePreviewModal();
+    if (btnModalClose) btnModalClose.addEventListener("click", closePreviewModal);
+    if (btnModalCloseFooter) btnModalCloseFooter.addEventListener("click", closePreviewModal);
+    if (previewModal) {
+        previewModal.addEventListener("click", (e) => {
+            if (e.target === previewModal) closePreviewModal();
+        });
+    }
+
+    // ==============================================================================
+    // 2026 Premium Form Verification & Live Submit Guard Implementation
+    // ==============================================================================
+
+    function validateField(input, validationFn, errorMsg) {
+        if (!input) return true;
+        const value = input.value.trim();
+        const isValid = validationFn(value);
+        const errorContainer = input.parentNode ? input.parentNode.querySelector(".field-error-msg") : null;
+        
+        if (!isValid) {
+            input.classList.add("has-error");
+            if (errorContainer) {
+                errorContainer.textContent = errorMsg;
+                errorContainer.classList.add("active");
+            }
+            return false;
+        } else {
+            input.classList.remove("has-error");
+            if (errorContainer) {
+                errorContainer.classList.remove("active");
+                errorContainer.textContent = "";
+            }
+            return true;
+        }
+    }
+
+    function clearFieldErrors(inputs) {
+        inputs.forEach(input => {
+            if (input) {
+                input.classList.remove("has-error");
+                const err = input.parentNode ? input.parentNode.querySelector(".field-error-msg") : null;
+                if (err) {
+                    err.classList.remove("active");
+                    err.textContent = "";
+                }
+            }
+        });
+    }
+
+    function validateForm() {
+        let isFormValid = true;
+        const activeProvider = cfgLlmType ? cfgLlmType.value : "ollama";
+        
+        // 1. 验证全局必填项：Trilium 基准网页地址
+        const isTriliumValid = validateField(
+            cfgTriliumUrl,
+            val => {
+                if (!val) return false;
+                return /^(https?:\/\/)/.test(val);
+            },
+            "请输入合法的 http:// 或 https:// 网页基准地址"
+        );
+        if (!isTriliumValid) isFormValid = false;
+
+        // 2. 验证当前选中的提供商专属字段
+        if (activeProvider === "ollama") {
+            const isBaseValid = validateField(
+                cfgOllamaBase,
+                val => {
+                    if (!val) return false;
+                    return /^(https?:\/\/)/.test(val);
+                },
+                "请输入合法的 http:// 或 https:// 接口地址"
+            );
+            const isModelValid = validateField(
+                cfgOllamaModel,
+                val => !!val,
+                "模型名称不能为空"
+            );
+            if (!isBaseValid || !isModelValid) isFormValid = false;
+            
+            clearFieldErrors([cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
+        } else if (activeProvider === "openai") {
+            const isBaseValid = validateField(
+                cfgOpenaiBase,
+                val => {
+                    if (!val) return false;
+                    return /^(https?:\/\/)/.test(val);
+                },
+                "请输入合法的 http:// 或 https:// 接口地址"
+            );
+            const isModelValid = validateField(
+                cfgOpenaiModel,
+                val => !!val,
+                "模型名称不能为空"
+            );
+            const isKeyValid = validateField(
+                cfgOpenaiKey,
+                val => !!val,
+                "API 密钥不能为空"
+            );
+            if (!isBaseValid || !isModelValid || !isKeyValid) isFormValid = false;
+            
+            clearFieldErrors([cfgOllamaBase, cfgOllamaModel, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
+        } else if (activeProvider === "deepseek") {
+            const isBaseValid = validateField(
+                cfgDeepseekBase,
+                val => {
+                    if (!val) return false;
+                    return /^(https?:\/\/)/.test(val);
+                },
+                "请输入合法的 http:// 或 https:// 接口地址"
+            );
+            const isModelValid = validateField(
+                cfgDeepseekModel,
+                val => !!val,
+                "模型名称不能为空"
+            );
+            const isKeyValid = validateField(
+                cfgDeepseekKey,
+                val => !!val,
+                "API 密钥不能为空"
+            );
+            if (!isBaseValid || !isModelValid || !isKeyValid) isFormValid = false;
+            
+            clearFieldErrors([cfgOllamaBase, cfgOllamaModel, cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey, cfgGeminiModel, cfgGeminiKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
+        } else if (activeProvider === "gemini") {
+            const isModelValid = validateField(
+                cfgGeminiModel,
+                val => !!val,
+                "模型名称不能为空"
+            );
+            const isKeyValid = validateField(
+                cfgGeminiKey,
+                val => !!val,
+                "API 密钥不能为空"
+            );
+            if (!isModelValid || !isKeyValid) isFormValid = false;
+            
+            clearFieldErrors([cfgOllamaBase, cfgOllamaModel, cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
+        } else if (activeProvider === "qwen") {
+            const isBaseValid = validateField(
+                cfgQwenBase,
+                val => {
+                    if (!val) return false;
+                    return /^(https?:\/\/)/.test(val);
+                },
+                "请输入合法的 http:// 或 https:// 接口地址"
+            );
+            const isModelValid = validateField(
+                cfgQwenModel,
+                val => !!val,
+                "模型名称不能为空"
+            );
+            const isKeyValid = validateField(
+                cfgQwenKey,
+                val => !!val,
+                "API 密钥不能为空"
+            );
+            if (!isBaseValid || !isModelValid || !isKeyValid) isFormValid = false;
+            
+            clearFieldErrors([cfgOllamaBase, cfgOllamaModel, cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey]);
+        }
+
+        // 3. 验证高级算法参数
+        const isSearchKValid = validateField(
+            cfgSearchK,
+            val => {
+                if (!val) return false;
+                const num = parseInt(val, 10);
+                return !isNaN(num) && num >= 1 && num <= 20;
+            },
+            "Search K 必须是 1 ~ 20 之间的整数"
+        );
+        const isThresholdValid = validateField(
+            cfgRerankerThreshold,
+            val => {
+                if (!val) return false;
+                const num = parseFloat(val);
+                return !isNaN(num) && num >= 0.0 && num <= 1.0;
+            },
+            "Reranker Threshold 必须是 0.0 ~ 1.0 之间的数值"
+        );
+        if (!isSearchKValid || !isThresholdValid) isFormValid = false;
+
+        // 4. 表单安全锁
+        if (btnSettingsSave) {
+            if (!isFormValid) {
+                btnSettingsSave.disabled = true;
+                const btnText = btnSettingsSave.querySelector(".btn-text");
+                if (btnText) btnText.textContent = "请修正表单中的错误项";
+            } else {
+                btnSettingsSave.disabled = false;
+                const btnText = btnSettingsSave.querySelector(".btn-text");
+                if (btnText) btnText.textContent = "保存热应用";
+            }
+        }
+        
+        return isFormValid;
+    }
+
+    // 绑定所有的输入框事件以实现渐进增强的表单安全锁
+    const verifiedInputs = [
+        cfgTriliumUrl, cfgOllamaBase, cfgOllamaModel, cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey,
+        cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey,
+        cfgQwenBase, cfgQwenModel, cfgQwenKey, cfgSearchK, cfgRerankerThreshold
+    ];
+    verifiedInputs.forEach(input => {
+        if (input) {
+            input.addEventListener("input", validateForm);
+            input.addEventListener("change", validateForm);
+        }
     });
+
 
     // ==========================================
     // 4. 业务逻辑方法实现
@@ -490,9 +728,6 @@ document.addEventListener("DOMContentLoaded", () => {
         dot.title = title;
     }
 
-    const debouncedTestTrilium = debounce(testTriliumConnection, 500);
-    const debouncedTestLlm = debounce(testLlmConnection, 500);
-
     async function handleLlmTypeChange(selectedModelValue = null) {
         if (!cfgLlmType || !cfgLlmPath || !cfgLlmPathSelect) return;
         const type = cfgLlmType.value;
@@ -578,13 +813,18 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const cleanBaseUrl = cachedTriliumBaseUrl.replace(/\/+$/, "");
         const jumpUrl = doc.note_id ? `${cleanBaseUrl}/#root/${doc.note_id}` : "#";
-        const title = doc.path ? doc.path.split(" > ").pop() : "参考来源";
+        const rawTitle = doc.path ? doc.path.split(" > ").pop() : "参考来源";
+        
+        // 采用 escapeHTML 双重过滤与转义，防御 DOM-XSS 与 DOM 结构破缺
+        const escapedPath = escapeHTML(doc.path || "");
+        const escapedTitle = escapeHTML(rawTitle || "参考来源");
+        const escapedJumpUrl = escapeHTML(jumpUrl || "#");
         
         popover.innerHTML = `
             <div class="citation-popover-header">
-                <span class="citation-popover-source" title="${doc.path || ''}">[${idx}] ${title}</span>
+                <span class="citation-popover-source" title="${escapedPath}">[${idx}] ${escapedTitle}</span>
                 ${doc.note_id && doc.note_id !== 'note_id' && doc.note_id !== '无' ? `
-                <a href="${jumpUrl}" target="_blank" class="citation-popover-jump">
+                <a href="${escapedJumpUrl}" target="_blank" class="citation-popover-jump">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     <span>在 Trilium 中打开</span>
                 </a>` : ''}
@@ -720,13 +960,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 获取 Auth Token
     function getAuthToken() {
-        return apiKeyInput.value.trim() || localStorage.getItem("trilium_agent_api_key") || "";
+        return (apiKeyInput ? apiKeyInput.value.trim() : "") || localStorage.getItem("trilium_agent_api_key") || "";
     }
 
     // 保存 Auth Token 进输入框
     function loadApiKeyFromStorage() {
         const storedKey = localStorage.getItem("trilium_agent_api_key");
-        if (storedKey) {
+        if (storedKey && apiKeyInput) {
             apiKeyInput.value = storedKey;
         }
     }
@@ -738,12 +978,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 更新 Session ID 展示
     function updateSessionIdDisplay() {
-        sessionDisplay.textContent = currentSessionId;
+        if (sessionDisplay) {
+            sessionDisplay.textContent = currentSessionId;
+        }
     }
 
     // Toast 弹窗通知
     function showToast(message, type = "success") {
         const container = document.getElementById("toast-container");
+        if (!container) {
+            console.log(`[Toast] [${type}] ${message}`);
+            return;
+        }
         const toast = document.createElement("div");
         toast.className = `toast ${type}`;
         
@@ -782,36 +1028,51 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 
                 // 1. LLM 状态标志
-                if (data.components.llm === "available") {
-                    statusLlm.textContent = "已就绪";
-                    statusLlmDot.className = "dot-indicator green";
-                } else if (data.components.llm.includes("degraded")) {
-                    statusLlm.textContent = "Mock降级";
-                    statusLlmDot.className = "dot-indicator orange";
-                } else {
-                    statusLlm.textContent = "不可用";
-                    statusLlmDot.className = "dot-indicator red";
+                if (statusLlm) {
+                    if (data.components && data.components.llm === "available") {
+                        statusLlm.textContent = "已就绪";
+                    } else if (data.components && data.components.llm && data.components.llm.includes("degraded")) {
+                        statusLlm.textContent = "Mock降级";
+                    } else {
+                        statusLlm.textContent = "不可用";
+                    }
+                }
+                if (statusLlmDot) {
+                    if (data.components && data.components.llm === "available") {
+                        statusLlmDot.className = "dot-indicator green";
+                    } else if (data.components && data.components.llm && data.components.llm.includes("degraded")) {
+                        statusLlmDot.className = "dot-indicator orange";
+                    } else {
+                        statusLlmDot.className = "dot-indicator red";
+                    }
                 }
 
                 // 2. Vector DB 状态标志
-                if (data.components.vector_db === "available") {
-                    statusVector.textContent = "正常";
-                    statusVectorDot.className = "dot-indicator green";
-                } else {
-                    statusVector.textContent = "无索引";
-                    statusVectorDot.className = "dot-indicator red";
+                if (statusVector) {
+                    if (data.components && data.components.vector_db === "available") {
+                        statusVector.textContent = "正常";
+                    } else {
+                        statusVector.textContent = "无索引";
+                    }
+                }
+                if (statusVectorDot) {
+                    if (data.components && data.components.vector_db === "available") {
+                        statusVectorDot.className = "dot-indicator green";
+                    } else {
+                        statusVectorDot.className = "dot-indicator red";
+                    }
                 }
             } else {
-                statusLlm.textContent = "未鉴权";
-                statusLlmDot.className = "dot-indicator orange";
-                statusVector.textContent = "未鉴权";
-                statusVectorDot.className = "dot-indicator orange";
+                if (statusLlm) statusLlm.textContent = "未鉴权";
+                if (statusLlmDot) statusLlmDot.className = "dot-indicator orange";
+                if (statusVector) statusVector.textContent = "未鉴权";
+                if (statusVectorDot) statusVectorDot.className = "dot-indicator orange";
             }
         } catch (e) {
-            statusLlm.textContent = "离线";
-            statusLlmDot.className = "dot-indicator red";
-            statusVector.textContent = "离线";
-            statusVectorDot.className = "dot-indicator red";
+            if (statusLlm) statusLlm.textContent = "离线";
+            if (statusLlmDot) statusLlmDot.className = "dot-indicator red";
+            if (statusVector) statusVector.textContent = "离线";
+            if (statusVectorDot) statusVectorDot.className = "dot-indicator red";
         }
     }
 
@@ -839,18 +1100,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateThemeToggleButton(theme) {
+        if (!btnThemeToggle) return;
         const sunIcon = btnThemeToggle.querySelector(".sun-icon");
         const moonIcon = btnThemeToggle.querySelector(".moon-icon");
         const hlStyle = document.getElementById("hl-theme");
 
-        if (theme === "dark") {
-            sunIcon.style.display = "block";
-            moonIcon.style.display = "none";
-            if (hlStyle) hlStyle.href = "/assets/libs/github-dark-dimmed.min.css";
-        } else {
-            sunIcon.style.display = "none";
-            moonIcon.style.display = "block";
-            if (hlStyle) hlStyle.href = "/assets/libs/github.min.css";
+        if (sunIcon) {
+            sunIcon.style.display = theme === "dark" ? "block" : "none";
+        }
+        if (moonIcon) {
+            moonIcon.style.display = theme === "dark" ? "none" : "block";
+        }
+        if (hlStyle) {
+            hlStyle.href = theme === "dark" ? "/assets/libs/github-dark-dimmed.min.css" : "/assets/libs/github.min.css";
         }
     }
 
@@ -870,11 +1132,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
             const sessions = data.sessions || {};
             
-            sessionHistoryList.innerHTML = "";
+            if (sessionHistoryList) {
+                sessionHistoryList.innerHTML = "";
+            }
             const sessionIds = Object.keys(sessions);
 
             if (sessionIds.length === 0) {
-                sessionHistoryList.innerHTML = '<div class="history-placeholder">暂无会话历史</div>';
+                if (sessionHistoryList) {
+                    sessionHistoryList.innerHTML = '<div class="history-placeholder">暂无会话历史</div>';
+                }
                 return;
             }
 
@@ -899,17 +1165,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
 
                 // 点击切换会话
-                item.querySelector(".item-left").addEventListener("click", () => {
-                    switchSession(sid);
-                });
+                const itemLeft = item.querySelector(".item-left");
+                if (itemLeft) {
+                    itemLeft.addEventListener("click", () => {
+                        switchSession(sid);
+                    });
+                }
 
                 // 点击删除会话
-                item.querySelector(".item-delete-btn").addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    deleteSession(sid);
-                });
+                const itemDeleteBtn = item.querySelector(".item-delete-btn");
+                if (itemDeleteBtn) {
+                    itemDeleteBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        deleteSession(sid);
+                    });
+                }
 
-                sessionHistoryList.appendChild(item);
+                if (sessionHistoryList) {
+                    sessionHistoryList.appendChild(item);
+                }
             });
         } catch (e) {
             console.error("加载会话历史异常:", e);
@@ -922,6 +1196,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("正处于智能回复流生成中，请稍后再切换会话", "warning");
             return;
         }
+        currentSourcesMap = {}; // 切换会话时清空引证缓存，解决长会话内存泄漏问题
         currentSessionId = sessionId;
         updateSessionIdDisplay();
         
@@ -1009,6 +1284,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("智能回复进行中，请先等待吐字结束", "warning");
             return;
         }
+        currentSourcesMap = {}; // 新建会话时清空引证缓存，解决长会话内存泄漏问题
         currentSessionId = generateUUID();
         updateSessionIdDisplay();
         chatHistory.innerHTML = "";
@@ -1076,6 +1352,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "X-API-Key": token }
             });
             if (response.ok) {
+                currentSourcesMap = {}; // 清空上下文时清空引证缓存，解决长会话内存泄漏问题
                 chatHistory.innerHTML = "";
                 appendDefaultGreeting();
                 loadSessionHistory();
@@ -1201,6 +1478,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
+            // 采用基于 W3C 标准的 Line-by-Line 状态机行缓冲区，安全捕获异常，彻底解决多事件粘包导致 JSON 解析崩溃的问题
             let buffer = "";
 
             while (true) {
@@ -1208,12 +1486,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n\n");
                 
-                // 保留最后一行未完成的内容在 buffer 里
-                buffer = lines.pop();
-
-                for (const line of lines) {
+                let lineEndIndex;
+                // 逐行解析数据流，支持 windows 格式的 \r\n 以及 W3C 标准的 \n
+                while ((lineEndIndex = buffer.indexOf("\n")) !== -1) {
+                    const rawLine = buffer.slice(0, lineEndIndex);
+                    buffer = buffer.slice(lineEndIndex + 1);
+                    
+                    const line = rawLine.trim();
                     if (line.startsWith("data: ")) {
                         const jsonStr = line.slice(6).trim();
                         if (!jsonStr) continue;
@@ -1247,7 +1527,8 @@ document.addEventListener("DOMContentLoaded", () => {
                                 aiContentDiv.innerHTML += `<div style="color:var(--btn-danger); font-weight:500; margin-top:8px;">⚠️ 问答生成流中断: ${event.data.message}</div>`;
                             }
                         } catch (err) {
-                            console.error("解析 Event 行失败:", err, line);
+                            // 优雅捕获单行 JSON 解析异常，确保粘包或破损报文不导致整个会话渲染死锁或崩溃
+                            console.error("解析 Event 行失败 (非合法 JSON):", err, line);
                         }
                     }
                 }
@@ -1380,6 +1661,24 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("未检测到后端服务，控制台已启用默认离线模式", "warning");
         }
 
+        // 渲染后台返回的非致命预警信息
+        const warnings = config.warnings || [];
+        const banner = document.getElementById("settings-warnings-banner");
+        const list = banner ? banner.querySelector(".warnings-list") : null;
+        if (banner && list) {
+            if (warnings.length > 0) {
+                list.innerHTML = "";
+                warnings.forEach(warn => {
+                    const li = document.createElement("li");
+                    li.textContent = warn;
+                    list.appendChild(li);
+                });
+                banner.style.display = "block";
+            } else {
+                banner.style.display = "none";
+            }
+        }
+
         // 1. 无论如何回填基础配置（隐藏域，以向后兼容原有探测和保存机制）
         const activeLlmType = config.llm_model_type || "ollama";
         if (cfgLlmType) cfgLlmType.value = activeLlmType;
@@ -1507,6 +1806,9 @@ document.addEventListener("DOMContentLoaded", () => {
             cfgMemoryContent.value = "未检测到后端，无法获取长期记忆。";
         }
 
+        // 运行初次表单验证，以建立表单安全锁初始状态
+        validateForm();
+
         // 打开抽屉 (这是核心，绝对不能被任何网络/鉴权失败阻断)
         settingsDrawer.classList.add("active");
         document.body.classList.add("no-scroll");
@@ -1524,13 +1826,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const token = getAuthToken();
         const activeProvider = cfgLlmType ? cfgLlmType.value : "ollama";
         
-        // 1. 提取核心基础及算法参数
+        // 1. 提取核心基础及算法参数，加持 Null Guards/可选链机制防御保存锁死
         const payload = {
             llm_model_type: activeProvider,
-            trilium_base_url: cfgTriliumUrl.value.trim(),
-            use_reranker: cfgUseReranker.checked,
-            reranker_threshold: parseFloat(cfgRerankerThreshold.value),
-            search_k: parseInt(cfgSearchK.value),
+            trilium_base_url: cfgTriliumUrl ? cfgTriliumUrl.value.trim() : "",
+            use_reranker: cfgUseReranker ? cfgUseReranker.checked : false,
+            reranker_threshold: cfgRerankerThreshold ? parseFloat(cfgRerankerThreshold.value) : 0.40,
+            search_k: cfgSearchK ? parseInt(cfgSearchK.value) : 3,
             response_mode: cfgResponseMode ? cfgResponseMode.value : "balanced"
         };
 
@@ -1582,7 +1884,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // 同步发送长期记忆保存请求 (并行，不阻塞模型热配置重载)
-        const memoryContent = cfgMemoryContent.value;
+        const memoryContent = cfgMemoryContent ? cfgMemoryContent.value : "";
         try {
             fetch("/api/v1/memory", {
                 method: "POST",
@@ -1602,12 +1904,14 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("保存记忆发生严重错误:", e);
         }
 
-        // 加载菊花 Loading
-        btnSettingsSave.disabled = true;
-        const btnText = btnSettingsSave.querySelector(".btn-text");
-        const spinner = btnSettingsSave.querySelector(".spinner");
-        btnText.textContent = "正在热重载大模型...";
-        spinner.style.display = "block";
+        // 加载菊花 Loading，双重 Null Guards 安全守护
+        if (btnSettingsSave) {
+            btnSettingsSave.disabled = true;
+            const btnText = btnSettingsSave.querySelector(".btn-text");
+            const spinner = btnSettingsSave.querySelector(".spinner");
+            if (btnText) btnText.textContent = "正在热重载大模型...";
+            if (spinner) spinner.style.display = "block";
+        }
 
         try {
             const response = await fetch("/api/v1/config", {
@@ -1620,8 +1924,31 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (response.ok) {
+                const resData = await response.json().catch(() => ({}));
                 showToast("配置保存成功！大模型已秒级热生效并持久化落盘！", "success");
-                closeSettingsDrawer();
+                
+                const warnings = resData.warnings || [];
+                const banner = document.getElementById("settings-warnings-banner");
+                const list = banner ? banner.querySelector(".warnings-list") : null;
+                
+                if (banner && list) {
+                    if (warnings.length > 0) {
+                        list.innerHTML = "";
+                        warnings.forEach(warn => {
+                            const li = document.createElement("li");
+                            li.textContent = warn;
+                            list.appendChild(li);
+                        });
+                        banner.style.display = "block";
+                        // 如果有警告，不关闭抽屉，高雅地显示，提醒用户有非致命预警
+                    } else {
+                        banner.style.display = "none";
+                        closeSettingsDrawer();
+                    }
+                } else {
+                    closeSettingsDrawer();
+                }
+                
                 // 刷新健康心跳监测
                 refreshSystemStatus();
             } else {
@@ -1631,9 +1958,13 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {
             showToast("请求发生异常，保存失败", "error");
         } finally {
-            btnSettingsSave.disabled = false;
-            btnText.textContent = "保存热应用";
-            spinner.style.display = "none";
+            if (btnSettingsSave) {
+                btnSettingsSave.disabled = false;
+                const btnText = btnSettingsSave.querySelector(".btn-text");
+                const spinner = btnSettingsSave.querySelector(".spinner");
+                if (btnText) btnText.textContent = "保存热应用";
+                if (spinner) spinner.style.display = "none";
+            }
         }
     }
 

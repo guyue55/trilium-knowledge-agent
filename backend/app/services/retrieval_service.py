@@ -145,8 +145,14 @@ class RetrievalService:
             if len(group) == 1:
                 rolled_up_docs.append(group[0])
             else:
-                # 按 chunk_index 进行物理时序正向排序
-                group.sort(key=lambda d: d.metadata.get("chunk_index", 0))
+                # 按 chunk_index 进行物理时序正向排序 (添加鲁棒的整型转换防错)
+                def _get_chunk_index(d):
+                    val = d.metadata.get("chunk_index", 0)
+                    try:
+                        return int(val) if val is not None else 0
+                    except (ValueError, TypeError):
+                        return 0
+                group.sort(key=_get_chunk_index)
                 
                 merged_contents = []
                 for doc in group:

@@ -34,8 +34,10 @@ class LiteLLMAdapter(LLMAdapter):
             self.api_base = config.openai_api_base or "http://localhost:11434"
             logger.info(f"Ollama 配置路由 -> 模型: {self.model_name}, Base: {self.api_base}")
         elif model_type == "qwen":
-            self.model_name = "qwen-turbo"
+            self.model_name = config.llm_model_path if config.llm_model_path else "qwen-turbo"
             self.api_key = config.qwen_api_key
+            self.api_base = config.openai_api_base or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            logger.info(f"Qwen 配置路由 -> 模型: {self.model_name}, Base: {self.api_base}")
         elif model_type == "deepseek":
             model_name_cfg = config.deepseek_model_name or "deepseek-chat"
             if model_name_cfg.startswith("deepseek/"):

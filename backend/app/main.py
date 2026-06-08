@@ -26,8 +26,8 @@ from app.retrieval.embeddings import EmbeddingAdapter
 from app.retrieval.reranker import Reranker
 from app.retrieval.vector_store import VectorStoreAdapter
 
-# 配置日志脱敏
-logger.add(lambda msg: None, filter=mask_sensitive_data)
+# 配置日志脱敏 (重塑 Loguru patcher 拦截网)
+logger.configure(patcher=mask_sensitive_data)
 
 # 获取全局配置单例
 config = get_config()

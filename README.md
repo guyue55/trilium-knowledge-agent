@@ -127,7 +127,44 @@ streamlit run frontend/app.py
 
 ### Docker 部署
 
-(待完善)
+项目支持一键式的 Docker Compose 容器部署，并默认启用了**零信任网络安全自启防护机制**。
+
+#### 1. 一键启动服务
+在项目根目录下，直接通过 Docker Compose 启动：
+```bash
+docker-compose up -d --build
+```
+系统将自动为您拉起 `trilium-agent-backend` 后端服务。
+
+#### 2. 安全防线：API_AUTH_KEY 机制
+在对外暴露端口或云服务器部署时，保障 API 的安全性极其重要。
+- **自定义 Token 部署**：
+  您可以在 `docker-compose.yml` 的 `environment:` 中配置 `API_AUTH_KEY`，或者在容器启动时指定此环境变量：
+  ```yaml
+  environment:
+    - API_AUTH_KEY=your_secret_api_key_here
+  ```
+- **默认安全自启生成（推荐）**：
+  如果您在部署时**没有指定或留空了 `API_AUTH_KEY`**，系统为了防止服务对外直接裸奔导致泄露大模型 API Key 额度，**会自动启动防护并在日志中随机生成一个 16 位强安全凭证**。
+  
+  **如何获取并使用生成的 Token：**
+  1. 运行以下命令查看后端启动日志：
+     ```bash
+     docker logs trilium-agent-backend
+     ```
+  2. 您将会在日志中看到醒目的金钥匙警告框：
+     ```text
+     🔑 [DOCKER 安全自启防护] 检测到处于容器部署环境，且未配置 API_AUTH_KEY 环境变量！
+     👉 为了防止服务公开暴露导致的安全隐患，系统已为您自动生成随机安全 Auth Token:
+
+        trilium_agent_123456abcdef...
+
+     👉 请复制此 Token，并填入前端界面左侧边栏底部的 [Auth Token] 输入框中，方可连通后端。
+     ```
+  3. 复制该 Token 值，刷新网页后直接填入前端主界面左下角侧边栏底部的 **[Auth Token]** 密码框中，系统将自愈重连，双端即可无缝打通安全交互通道。
+
+- **本地免密对比**：
+  在非 Docker 容器环境（即直接通过 `uvicorn` 本地命令行启动）中运行时，如果您不填 `API_AUTH_KEY`，则依然默认不开启密码鉴权，不影响本地开箱即用的免登录、极简本地体验。这实现了“本地零摩擦”与“容器高安全”的完美统一。
 
 ## 贡献
 

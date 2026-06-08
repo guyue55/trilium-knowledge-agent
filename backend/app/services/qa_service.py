@@ -35,15 +35,19 @@ class QAService:
         self.memory_manager = memory_manager
         self.intent_router = IntentRouter()
         # Session-level 锁机制，杜绝对全局多租户/多会话并发的任何排队阻塞
-        self._session_locks: Dict[str, asyncio.Lock] = {}
+        # 引入 WeakValueDictionary，弱引用自动垃圾回收防止局部锁仅增不减的缓慢内存泄漏
+        import weakref
+        self._session_locks = weakref.WeakValueDictionary()
         self._session_locks_lock = asyncio.Lock()
 
     async def _get_session_lock(self, session_id: str) -> asyncio.Lock:
-        """注册并获取指定会话的局部 Lock，保障单 Session 时序一致性的同时，实现全局多会话完全并行."""
+        """注册并获取指定会话的局部 Lock，保障单 Session 时序一致性的同时，实现全局多会话完全并行 (弱引用防泄漏自愈)."""
         async with self._session_locks_lock:
-            if session_id not in self._session_locks:
-                self._session_locks[session_id] = asyncio.Lock()
-            return self._session_locks[session_id]
+            lock = self._session_locks.get(session_id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._session_locks[session_id] = lock
+            return lock
 
     def _get_chitchat_prompt_template(self) -> str:
         return """你是一个友好、优雅、聪明的 AI 助手。

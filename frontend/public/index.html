@@ -82,7 +82,7 @@
                         <label for="api-key-input">Auth Token</label>
                     </div>
                     <div class="input-with-icon">
-                        <input type="password" id="api-key-input" placeholder="输入 X-API-Key" class="glass-input">
+                        <input type="password" id="api-key-input" placeholder="输入 X-API-Key" class="glass-input" autocomplete="new-password">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="key-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                     </div>
                 </div>
@@ -200,6 +200,15 @@
             </div>
             
             <form id="settings-form" class="drawer-body">
+                <!-- 系统配置预警横幅 (非阻断，仅作运行提示) -->
+                <div id="settings-warnings-banner" class="settings-warnings-banner" style="display: none;">
+                    <div class="warnings-banner-header">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        <span>系统配置预警 (非阻断，仅作运行提示)</span>
+                    </div>
+                    <ul class="warnings-list"></ul>
+                </div>
+
                 <!-- ================= TAB 1: 大大脑引擎 ================= -->
                 <div id="tab-ai-engine" class="tab-content active">
                     <!-- 模型选择卡片网格 -->
@@ -290,17 +299,19 @@
                     <!-- Ollama 专属配置 -->
                     <div id="fields-ollama" class="provider-fields-group">
                         <div class="form-item">
-                            <label>Ollama 本地服务地址</label>
+                            <label>Ollama 本地服务地址 <span class="required-star">*</span></label>
                             <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>模型标识 (LLM_MODEL_PATH)</label>
+                            <label>模型标识 (LLM_MODEL_PATH) <span class="required-star">*</span></label>
                             <div id="model-path-container" style="position: relative; width: 100%;">
                                 <input type="text" id="cfg-ollama-model" class="glass-input-field" placeholder="例如: qwen2.5:7b, llama3 等">
                                 <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
                                     <!-- 动态填充 -->
                                 </select>
                             </div>
+                            <div class="field-error-msg"></div>
                         </div>
                     </div>
 
@@ -309,14 +320,17 @@
                         <div class="form-item">
                             <label>OpenAI 代理 Base URL</label>
                             <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址: https://api.openai.com/v1">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
+                            <label>OpenAI 密钥 (OPENAI_API_KEY) <span class="required-star">*</span></label>
                             <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>OpenAI 模型名称 (OPENAI_MODEL_NAME)</label>
+                            <label>OpenAI 模型名称 (OPENAI_MODEL_NAME) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o">
+                            <div class="field-error-msg"></div>
                         </div>
                     </div>
 
@@ -325,26 +339,31 @@
                         <div class="form-item">
                             <label>DeepSeek 代理 Base URL</label>
                             <input type="text" id="cfg-deepseek-base" class="glass-input-field" placeholder="默认官方地址: https://api.deepseek.com/v1">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
+                            <label>DeepSeek 密钥 (DEEPSEEK_API_KEY) <span class="required-star">*</span></label>
                             <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>DeepSeek 模型名称 (DEEPSEEK_MODEL_NAME)</label>
+                            <label>DeepSeek 模型名称 (DEEPSEEK_MODEL_NAME) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-deepseek-model" class="glass-input-field" placeholder="例如: deepseek-chat, deepseek-coder">
+                            <div class="field-error-msg"></div>
                         </div>
                     </div>
 
                     <!-- Google Gemini 专属配置 -->
                     <div id="fields-gemini" class="provider-fields-group">
                         <div class="form-item">
-                            <label>Gemini 密钥 (GEMINI_API_KEY)</label>
+                            <label>Gemini 密钥 (GEMINI_API_KEY) <span class="required-star">*</span></label>
                             <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>Gemini 模型名称 (GEMINI_MODEL_NAME)</label>
+                            <label>Gemini 模型名称 (GEMINI_MODEL_NAME) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-gemini-model" class="glass-input-field" placeholder="例如: gemini-2.5-flash, gemini-1.5-pro">
+                            <div class="field-error-msg"></div>
                         </div>
                     </div>
 
@@ -353,14 +372,17 @@
                         <div class="form-item">
                             <label>通义千问 代理 Base URL</label>
                             <input type="text" id="cfg-qwen-base" class="glass-input-field" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>通义千问 密钥 (QWEN_API_KEY)</label>
+                            <label>通义千问 密钥 (QWEN_API_KEY) <span class="required-star">*</span></label>
                             <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                            <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>Qwen 模型名称 (QWEN_MODEL_NAME)</label>
+                            <label>Qwen 模型名称 (QWEN_MODEL_NAME) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-qwen-model" class="glass-input-field" placeholder="例如: qwen-turbo, qwen-plus">
+                            <div class="field-error-msg"></div>
                         </div>
                     </div>
                 </div>
@@ -371,10 +393,11 @@
                     <div class="form-section-title">知识库数据源接入 (Trilium Integrations)</div>
                     <div class="form-item">
                         <div class="form-label-row">
-                            <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
+                            <label>Trilium 基准网页地址 (TRILIUM_BASE_URL) <span class="required-star">*</span></label>
                             <span id="trilium-status-dot" class="live-status-dot" title="Trilium 连通性探测中..."></span>
                         </div>
                         <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
+                        <div class="field-error-msg"></div>
                     </div>
 
                     <!-- 长期记忆配置区 -->

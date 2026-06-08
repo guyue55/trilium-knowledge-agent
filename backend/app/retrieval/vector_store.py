@@ -41,7 +41,7 @@ class VectorStoreAdapter:
             dim = len(dummy_vec) if dummy_vec else 384
             
             # 使用动态生成 Schema (适配不同的 metadata 和维度)
-            from pyarrow import schema, string, float32, list_
+            from pyarrow import schema, string, float32, list_, int32
             self.schema = schema([
                 ("id", string()),
                 ("vector", list_(float32(), dim)),
@@ -50,6 +50,7 @@ class VectorStoreAdapter:
                 ("title", string()),
                 ("source", string()),
                 ("path", string()),
+                ("chunk_index", int32()),
             ])
 
             if self.table_name in self.db.table_names():
@@ -118,7 +119,8 @@ class VectorStoreAdapter:
                         "note_id": meta.get("note_id", ""),
                         "title": meta.get("title", ""),
                         "source": meta.get("source", ""),
-                        "path": meta.get("path", "")
+                        "path": meta.get("path", ""),
+                        "chunk_index": int(meta.get("chunk_index", 0))
                     }
                     data.append(record)
                     
@@ -228,7 +230,8 @@ class VectorStoreAdapter:
                     "note_id": r.get("note_id", ""),
                     "title": r.get("title", ""),
                     "source": r.get("source", ""),
-                    "path": r.get("path", "")
+                    "path": r.get("path", ""),
+                    "chunk_index": r.get("chunk_index", 0)
                 }
                 
                 doc = Document(page_content=r.get("text", ""), metadata=meta)

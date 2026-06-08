@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 from loguru import logger
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -157,6 +157,9 @@ class Config(BaseSettings):
     hf_endpoint: str = Field(default="https://hf-mirror.com")
     api_auth_key: str = Field(default="", repr=False)
 
+    # 私有属性，用于收集运行时的非致命预警信息，从而在前端高雅地渲染展示
+    _warnings: list[str] = PrivateAttr(default=[])
+
     @model_validator(mode='after')
     def validate_complex_rules(self) -> "Config":
         """执行更复杂的关联校验规则，通过软警告和容错设计，提升开箱即用的部署体验。"""
@@ -172,6 +175,26 @@ class Config(BaseSettings):
         self.embedding_model_local_path = normalize_to_absolute(self.embedding_model_local_path)
         self.reranker_model_local_path = normalize_to_absolute(self.reranker_model_local_path)
 
+        # 0.5 容器部署环境安全凭证自启防护机制
+        # 如果是在 Docker 容器环境下运行（检测 /.dockerenv 存在或项目根目录为 /app），且未配置任何 API_AUTH_KEY
+        # 为安全性考虑，自动在服务启动时生成 16 位随机安全 Token 并打印到日志，防止后端 API 处于裸奔状态。
+        # 本地非容器运行或运行测试时不触发，默认仍保持免密码启动，不影响现有逻辑。
+        import sys
+        is_docker_env = Path("/.dockerenv").exists() or PROJECT_ROOT == Path("/app")
+        is_testing_env = "pytest" in sys.modules or "unittest" in sys.modules
+        if is_docker_env and not is_testing_env and (not self.api_auth_key or self.api_auth_key.strip() == ""):
+            import secrets
+            generated_key = f"trilium_agent_{secrets.token_hex(8)}"
+            self.api_auth_key = generated_key
+            logger.warning(
+                f"\n"
+                f"   ========================================================================\n"
+                f"   🔑 [DOCKER 安全自启防护] 检测到处于容器部署环境，且未配置 API_AUTH_KEY 环境变量！\n"
+                f"   👉 为了防止服务公开暴露导致的安全隐患，系统已为您自动生成随机安全 Auth Token:\n\n"
+                f"      {generated_key}\n\n"
+                f"   👉 请复制此 Token，并填入前端界面左侧边栏底部的 [Auth Token] 输入框中，方可连通后端。\n"
+                f"   ========================================================================"
+            )
 
         warnings = []
         errors = []
@@ -209,6 +232,7 @@ class Config(BaseSettings):
             warnings.append("LLM_MODEL_TYPE 设为了 gemini，但未提供 GEMINI_API_KEY，大模型问答将自动切换为本地 Mock 降级体验")
 
         # 4. 统一处理警告与错误
+        self._warnings = warnings
         if warnings:
             for warn in warnings:
                 logger.warning(f"⚠️ [配置宽容提示] {warn}")

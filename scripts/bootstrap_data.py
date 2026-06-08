@@ -218,7 +218,7 @@ def clean_html(raw_html: str) -> str:
 # ==============================================================================
 # 3. 核心灌入逻辑
 # ==============================================================================
-def main():
+async def main():
     logger.info("======================================================================")
     logger.info("   🚀 开始执行一键数据治理与高价值种子知识库智能灌入 (Bootstrap Engine) 🚀")
     logger.info("======================================================================")
@@ -305,7 +305,7 @@ def main():
 
     for q in queries:
         logger.info(f"▶️ [提问 Query] : \"{q}\"")
-        results = vector_store.similarity_search_with_scores(q, k=2)
+        results = await vector_store.similarity_search_with_scores(q, k=2)
         logger.info(f"   召回结果数: {len(results)}")
         for idx, (doc, score) in enumerate(results, 1):
             logger.info(f"   [{idx}] [综合相似度 RRF 评分: {score:.4f}]")
@@ -318,4 +318,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

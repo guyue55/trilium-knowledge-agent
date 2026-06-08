@@ -27,9 +27,10 @@ class SyncService:
         logger.info("开始执行知识库后台同步作业...")
         
         try:
-            # 1. 连接 Trilium
-            client = TriliumClient(self.config.trilium_base_url, self.config.trilium_token)
-            if not client.is_connected():
+            # 1. 异步 Offload 连接 Trilium，防握手卡死事件循环
+            client = await asyncio.to_thread(TriliumClient, self.config.trilium_base_url, self.config.trilium_token)
+            connected = await asyncio.to_thread(client.is_connected)
+            if not connected:
                 logger.error("SyncService: Trilium 客户端连接失败，终止同步。")
                 return
             

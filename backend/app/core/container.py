@@ -39,5 +39,15 @@ class AppContainer:
             except Exception as e:
                 logger.error(f"清理 LLM Adapter 时出错: {e}")
 
+        # ⚡ 2026 Concurrency Safe: 清理 Trilium 全局共享 Session 连接池，彻底杜绝套接字泄露
+        try:
+            from app.trilium.client import _shared_session
+            if _shared_session:
+                logger.info("🔌 AppContainer: 正在清理 Trilium 全局共享 Session 连接池...")
+                _shared_session.close()
+                logger.info("🔌 AppContainer: Trilium 共享 Session 已安全关闭。")
+        except Exception as e:
+            logger.error(f"清理 Trilium 共享 Session 时出错: {e}")
+
 # 全局唯一容器实例
 container = AppContainer()
