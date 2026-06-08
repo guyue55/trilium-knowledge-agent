@@ -1,0 +1,10 @@
+<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L14.8 9.2L22 12L14.8 14.8L12 22L9.2 14.8L2 12L9.2 9.2L12 2Z" fill="url(#sparkGradient)"/>
+    <defs>
+        <linearGradient id="sparkGradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#8ab4f8"/>
+            <stop offset="50%" stop-color="#c58af9"/>
+            <stop offset="100%" stop-color="#f07ce3"/>
+        </linearGradient>
+    </defs>
+</svg>

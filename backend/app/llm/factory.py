@@ -55,9 +55,18 @@ class LiteLLMAdapter(LLMAdapter):
                 self.model_name = f"gemini/{model_name_cfg}"
             self.api_key = config.gemini_api_key
             logger.info(f"Gemini 配置路由 -> 模型: {self.model_name}")
+        elif model_type == "openai":
+            model_name_cfg = config.openai_model_name or "gpt-3.5-turbo"
+            if model_name_cfg and not model_name_cfg.startswith("openai/"):
+                self.model_name = f"openai/{model_name_cfg}"
+            else:
+                self.model_name = model_name_cfg
+            self.api_key = config.openai_api_key or "none"  # 注入防报错占位符
+            self.api_base = config.openai_api_base or "https://api.openai.com/v1"
+            logger.info(f"OpenAI 配置路由 -> 模型: {self.model_name}, Base: {self.api_base}")
         else: # 默认 fallback 到 OpenAI / 兼容第三方平台
             self.model_name = config.openai_model_name or "gpt-3.5-turbo"
-            self.api_key = config.openai_api_key
+            self.api_key = config.openai_api_key or "none"
             self.api_base = config.openai_api_base
 
     def initialize(self) -> bool:
@@ -165,8 +174,9 @@ class LLMFactory:
         model_type = config.llm_model_type.lower()
         
         # 1. 密钥空置直接阻断与智能降级自适应
-        # 如果不是本地 Ollama 模型，但又没有提供任何第三方云端 API 凭证，直接在工厂层装载备用 Mock 引擎
+        # 如果不是本地 Ollama 模型，且不是 OpenAI 格式模型，但又没有提供任何第三方云端 API 凭证，直接在工厂层装载备用 Mock 引擎
         is_ollama = (model_type == "ollama")
+        is_openai = (model_type == "openai")
         has_api_credentials = bool(
             config.openai_api_key.strip() or 
             config.qwen_api_key.strip() or 
@@ -174,7 +184,7 @@ class LLMFactory:
             config.gemini_api_key.strip()
         )
         
-        if not is_ollama and not has_api_credentials:
+        if not is_ollama and not is_openai and not has_api_credentials:
             logger.warning(f"大模型类型为 [{config.llm_model_type}]，但未配置有效 API 密钥。LLMFactory 将自动装载本地内置 MockLLMAdapter 保障全系统正常运转。")
             return LLMFactory._get_mock_fallback()
 

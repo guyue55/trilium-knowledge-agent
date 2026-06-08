@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from loguru import logger
 
 from app.api.endpoints import router as api_router
@@ -154,6 +154,15 @@ if not frontend_dir.exists():
     frontend_dir = temp_frontend_dir
 
 app.mount("/assets", StaticFiles(directory=str(frontend_dir)), name="assets")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """软性接管浏览器对 /favicon.ico 的默认底层高频请求，完美消除 404 报警."""
+    favicon_path = frontend_dir / "favicon.svg"
+    if favicon_path.exists():
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+    return Response(status_code=204)
 
 
 @app.get("/")

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>Trilium Knowledge Agent - Gemini Web Style</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <!-- 阻塞式首屏主题初始化内联拦截脚本（零延迟，彻底根治 Light Mode 刷新闪烁深色 Bug） -->
     <script>
         (function() {
@@ -319,17 +320,17 @@
                     <div id="fields-openai" class="provider-fields-group">
                         <div class="form-item">
                             <label>OpenAI 代理 Base URL</label>
-                            <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址: https://api.openai.com/v1">
+                            <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址。自定义兼容接口请输入 http(s):// 地址">
                             <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
-                            <label>OpenAI 密钥 (OPENAI_API_KEY) <span class="required-star">*</span></label>
-                            <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                            <label>API 密钥 (OPENAI_API_KEY) <span style="font-weight: normal; font-size: 11px; opacity: 0.8; color: var(--accent-color, #1890ff);">(选填，免 Key 代理可留空)</span></label>
+                            <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="默认官方密钥。若使用本地或自建无密钥接口可直接留空。">
                             <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">
                             <label>OpenAI 模型名称 (OPENAI_MODEL_NAME) <span class="required-star">*</span></label>
-                            <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o">
+                            <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o 或自定义模型标识">
                             <div class="field-error-msg"></div>
                         </div>
                     </div>

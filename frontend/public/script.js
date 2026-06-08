@@ -492,10 +492,11 @@ document.addEventListener("DOMContentLoaded", () => {
             
             clearFieldErrors([cfgOpenaiBase, cfgOpenaiModel, cfgOpenaiKey, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
         } else if (activeProvider === "openai") {
+            // OpenAI Base URL 是选填的 (若留空，在前后端均自适应走官方缺省)
             const isBaseValid = validateField(
                 cfgOpenaiBase,
                 val => {
-                    if (!val) return false;
+                    if (!val) return true; // 允许留空，留空时合法
                     return /^(https?:\/\/)/.test(val);
                 },
                 "请输入合法的 http:// 或 https:// 接口地址"
@@ -505,12 +506,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 val => !!val,
                 "模型名称不能为空"
             );
-            const isKeyValid = validateField(
-                cfgOpenaiKey,
-                val => !!val,
-                "API 密钥不能为空"
-            );
-            if (!isBaseValid || !isModelValid || !isKeyValid) isFormValid = false;
+            // API Key 设为选填 (允许留空以支持无密钥本地/代理服务)
+            const isKeyValid = true;
+            if (cfgOpenaiKey) {
+                clearFieldErrors([cfgOpenaiKey]);
+            }
+            if (!isBaseValid || !isModelValid) isFormValid = false;
             
             clearFieldErrors([cfgOllamaBase, cfgOllamaModel, cfgDeepseekBase, cfgDeepseekModel, cfgDeepseekKey, cfgGeminiModel, cfgGeminiKey, cfgQwenBase, cfgQwenModel, cfgQwenKey]);
         } else if (activeProvider === "deepseek") {
@@ -1121,13 +1122,63 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
 
     // 加载会话历史
+    // 渲染会话加载错误卡片
+    function renderHistoryErrorCard(icon, title, desc) {
+        if (!sessionHistoryList) return;
+        sessionHistoryList.innerHTML = `
+            <div class="history-error-card">
+                <div class="error-icon">${icon}</div>
+                <div class="error-title">${title}</div>
+                <div class="error-desc">${desc}</div>
+                <button class="btn-retry" id="btn-history-retry">重新检查</button>
+            </div>
+        `;
+        const retryBtn = document.getElementById("btn-history-retry");
+        if (retryBtn) {
+            retryBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                loadSessionHistory();
+            });
+        }
+    }
+
+    // 处理鉴权异常与高亮抖动
+    function handleSessionLoadError(response) {
+        if (response.status === 401 || response.status === 403) {
+            renderHistoryErrorCard(
+                "⚠️",
+                "Auth Token 未通过",
+                "无法连接后端，请核对并修正左下角的 <span>Auth Token</span>。"
+            );
+            
+            // 触发底部 Token 输入框呼吸和微震动动画
+            if (apiKeyInput) {
+                apiKeyInput.classList.add("input-error-shake");
+                setTimeout(() => {
+                    apiKeyInput.classList.remove("input-error-shake");
+                }, 1000);
+            }
+            showToast("API 鉴权失效，请核对左下角 Auth Token！", "error");
+        } else {
+            renderHistoryErrorCard(
+                "🔌",
+                "服务响应异常",
+                `后端服务返回异常状态码 (HTTP ${response.status})。`
+            );
+        }
+    }
+
+    // 加载会话历史
     async function loadSessionHistory() {
         try {
             const token = getAuthToken();
             const response = await fetch("/api/v1/sessions", {
                 headers: { "X-API-Key": token }
             });
-            if (!response.ok) return;
+            if (!response.ok) {
+                handleSessionLoadError(response);
+                return;
+            }
 
             const data = await response.json();
             const sessions = data.sessions || {};
@@ -1187,6 +1238,11 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         } catch (e) {
             console.error("加载会话历史异常:", e);
+            renderHistoryErrorCard(
+                "📡",
+                "网络连接异常",
+                "无法连接到后端服务，请确认后端程序已正常启动。"
+            );
         }
     }
 
