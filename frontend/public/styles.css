@@ -51,6 +51,15 @@
     --badge-success: #1e8e3e;
     --badge-warning: #f9ab00;
     --badge-error: #d93025;
+    /* 卡片专属变量：光影美学自适应 */
+    --card-bg: rgba(0, 0, 0, 0.02);
+    --card-border: rgba(0, 0, 0, 0.08);
+    --card-hover-bg: rgba(0, 0, 0, 0.04);
+    --card-hover-border: rgba(0, 0, 0, 0.15);
+    --card-icon-bg: rgba(0, 0, 0, 0.04);
+    --popover-bg: rgba(255, 255, 255, 0.95);
+    --popover-text: #1f2937;
+    --popover-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 :root[data-theme="dark"] {
@@ -76,6 +85,15 @@
     --badge-success: #81c995;
     --badge-warning: #fdd663;
     --badge-error: #f28b82;
+    /* 卡片专属变量：光影美学自适应 */
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --card-hover-bg: rgba(255, 255, 255, 0.06);
+    --card-hover-border: rgba(255, 255, 255, 0.18);
+    --card-icon-bg: rgba(255, 255, 255, 0.05);
+    --popover-bg: rgba(15, 23, 42, 0.95);
+    --popover-text: #cbd5e1;
+    --popover-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05);
 }
 
 /* 基础重置 */
@@ -84,7 +102,12 @@
     margin: 0;
     padding: 0;
     font-family: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 2026 Premium 零闪烁主题渐变（仅限手动切换，不污染首屏） */
+.theme-transition,
+.theme-transition * {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease !important;
 }
 
 body, html {
@@ -895,18 +918,105 @@ body, html {
 }
 
 .close-icon-btn:hover {
-    background: rgba(255,255,255,0.06);
+    background: var(--accent-light);
     color: var(--text-main);
+}
+
+/* 2026 Premium Tab 栏切换器样式 */
+.drawer-tabs {
+    display: flex;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--panel-border);
+    gap: 16px;
+    background: rgba(var(--bg-gradient-start), 0.2);
+}
+
+.drawer-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-sub);
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.drawer-tab svg {
+    opacity: 0.7;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.drawer-tab:hover {
+    color: var(--text-main);
+}
+
+.drawer-tab:hover svg {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.drawer-tab.active {
+    color: var(--primary-color);
+}
+
+.drawer-tab.active svg {
+    color: var(--primary-color);
+    opacity: 1;
+}
+
+/* 激活态底部律动滑动蓝条 */
+.drawer-tab::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--primary-color);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 8px var(--primary-color);
+}
+
+.drawer-tab.active::after {
+    transform: scaleX(1);
+}
+
+/* Tab 内容分栏样式与淡入动效 */
+.tab-content {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    padding: 24px;
+    gap: 20px;
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.tab-content.active {
+    display: flex;
+    animation: tabFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tabFadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* 抽屉表单 */
 .drawer-body {
     flex: 1;
-    overflow-y: auto;
-    padding: 24px;
+    overflow-y: hidden; /* 让每个 tab 独立滚动，避免整体多余滚动条 */
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
 }
 
 .form-item {
@@ -1636,15 +1746,15 @@ body, html {
     gap: 12px;
     padding: 12px 14px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .style-card:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
     transform: translateY(-1px);
 }
 
@@ -1671,12 +1781,12 @@ body, html {
 .card-title {
     font-size: 13.5px;
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--text-main);
 }
 
 .card-desc {
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--text-sub);
     margin-top: 2px;
     line-height: 1.4;
 }
@@ -1693,20 +1803,20 @@ body, html {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     padding: 6px 14px;
     border-radius: 20px;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--text-sub);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .glass-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
-    color: #f8fafc;
+    background: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
+    color: var(--text-main);
 }
 
 .glass-toggle-btn .toggle-icon.expanded {
@@ -1730,7 +1840,7 @@ body, html {
 .advanced-hyperparams.show {
     max-height: 220px; /* 安全高级高度上限 */
     opacity: 1;
-    border-top-color: rgba(255, 255, 255, 0.06);
+    border-top-color: var(--panel-border);
     padding-top: 14px;
     margin-top: 10px;
 }
@@ -1769,14 +1879,14 @@ body, html {
     z-index: 2000;
     width: 320px;
     max-height: 220px;
-    background: rgba(15, 23, 42, 0.9);
+    background: var(--popover-bg);
     backdrop-filter: blur(12px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--panel-border);
+    box-shadow: var(--popover-shadow);
     border-radius: 12px;
     padding: 12px 14px;
     font-size: 13px;
-    color: #cbd5e1;
+    color: var(--popover-text);
     line-height: 1.5;
     pointer-events: auto;
     opacity: 0;
@@ -1793,11 +1903,11 @@ body, html {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--panel-border);
     padding-bottom: 6px;
     margin-bottom: 8px;
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--text-sub);
     font-weight: 600;
 }
 
@@ -1846,13 +1956,13 @@ body, html {
 
 .citation-popover-body::-webkit-scrollbar-thumb,
 .glass-textarea::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--panel-border);
     border-radius: 4px;
 }
 
 .citation-popover-body::-webkit-scrollbar-thumb:hover,
 .glass-textarea::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--text-hint);
 }
 
 /* ==============================================================================
@@ -1907,8 +2017,8 @@ body, html {
 
 .provider-card {
     position: relative;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 12px 14px;
     display: flex;
@@ -1925,8 +2035,8 @@ body, html {
 /* 卡片悬浮动效：微幅上浮、卡片背景变亮、外层柔和脉冲光晕 */
 .provider-card:hover {
     transform: translateY(-2px);
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.18);
+    background: var(--card-hover-bg);
+    border-color: var(--card-hover-border);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
@@ -1946,13 +2056,13 @@ body, html {
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--card-icon-bg);
     color: var(--text-main);
     transition: all 0.3s ease;
 }
 
 .provider-card:hover .provider-icon {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--card-hover-bg);
 }
 
 .provider-card.active .provider-icon {
@@ -1988,7 +2098,7 @@ body, html {
     padding: 1px 5px;
     border-radius: 4px;
     text-transform: uppercase;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--card-icon-bg);
     color: var(--text-sub);
     letter-spacing: 0.5px;
 }
@@ -2012,7 +2122,7 @@ body, html {
 /* 专属字段容器平滑淡入展开 */
 .provider-fields-group {
     display: none;
-    border-top: 1px dashed rgba(255, 255, 255, 0.06);
+    border-top: 1px dashed var(--panel-border);
     padding-top: 16px;
     margin-top: 6px;
 }

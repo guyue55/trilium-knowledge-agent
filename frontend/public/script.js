@@ -201,6 +201,28 @@ document.addEventListener("DOMContentLoaded", () => {
     // 抽屉保存
     btnSettingsSave.addEventListener("click", saveSettings);
 
+    // 2026 Premium 侧边栏 Tab 栏点击切换事件
+    const drawerTabs = document.querySelectorAll(".drawer-tab");
+    const tabContents = document.querySelectorAll(".tab-content");
+    drawerTabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+            const targetTab = tab.getAttribute("data-tab");
+            
+            // 切换 Tab 头激活态
+            drawerTabs.forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            
+            // 切换 Tab 内容展示
+            tabContents.forEach(content => {
+                if (content.id === `tab-${targetTab}`) {
+                    content.classList.add("active");
+                } else {
+                    content.classList.remove("active");
+                }
+            });
+        });
+    });
+
     // ==========================================
     // 3.5 2026 智能化自适应与实时验证事件绑定
     // ==========================================
@@ -328,6 +350,15 @@ document.addEventListener("DOMContentLoaded", () => {
         inputs.forEach(input => {
             if (input) {
                 input.addEventListener("input", () => {
+                    // 备份各自的专属 Base URL 快照至 LocalStorage，绝不互相污染
+                    if (input === cfgOllamaBase) {
+                        localStorage.setItem("trilium_agent_ollama_base", input.value.trim());
+                    } else if (input === cfgOpenaiBase) {
+                        localStorage.setItem("trilium_agent_openai_base", input.value.trim());
+                    } else if (input === cfgQwenBase) {
+                        localStorage.setItem("trilium_agent_qwen_base", input.value.trim());
+                    }
+                    
                     syncActiveProviderValuesToHidden();
                     if (typeof debouncedTestLlm === "function") debouncedTestLlm();
                 });
@@ -467,32 +498,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const type = cfgLlmType.value;
         
         // 动态更换模型物理路径/标识的专属占位符
-        if (cfgLlmPath) {
-            switch (type) {
-                case "ollama":
-                    cfgLlmPath.placeholder = "例如: qwen2.5:7b, llama3, mistral 等";
-                    break;
-                case "deepseek":
-                    cfgLlmPath.placeholder = "例如: deepseek-chat, deepseek-coder";
-                    break;
-                case "gemini":
-                    cfgLlmPath.placeholder = "例如: gemini-1.5-flash, gemini-1.5-pro";
-                    break;
-                case "qwen":
-                    cfgLlmPath.placeholder = "例如: qwen-turbo, qwen-plus, qwen-max";
-                    break;
-                case "openai":
-                default:
-                    cfgLlmPath.placeholder = "例如: gpt-4o, gpt-3.5-turbo 等";
-                    break;
-            }
+        if (cfgOllamaModel) {
+            cfgOllamaModel.placeholder = "例如: qwen2.5:7b, llama3 等";
         }
 
-        // 动态自适应呈现与披露配置面板
-        renderDynamicConfigPanels(type);
-
         if (type === "ollama") {
-            cfgLlmPath.style.display = "none";
+            if (cfgOllamaModel) {
+                cfgOllamaModel.style.display = "none";
+            }
             cfgLlmPathSelect.style.display = "block";
             cfgLlmPathSelect.innerHTML = `<option value="">⌛ 正在自动检测本地模型...</option>`;
             
@@ -521,6 +534,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             cfgLlmPathSelect.selectedIndex = 0;
                         }
                         cfgLlmPath.value = cfgLlmPathSelect.value;
+                        if (cfgOllamaModel) {
+                            cfgOllamaModel.value = cfgLlmPathSelect.value;
+                        }
                     } else {
                         showToast("本地未检测到可用的已下载 Ollama 模型，已切换为手动输入", "warning");
                         switchToTextInput();
@@ -532,134 +548,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 switchToTextInput();
             }
         } else {
-            cfgLlmPath.style.display = "block";
+            if (cfgOllamaModel) {
+                cfgOllamaModel.style.display = "block";
+            }
             cfgLlmPathSelect.style.display = "none";
         }
     }
 
     function renderDynamicConfigPanels(type) {
-        const wrapperApiBase = document.getElementById("wrapper-api-base");
-        const apiKeysSection = document.getElementById("api-keys-section");
-        const wrapperOpenai = document.getElementById("wrapper-openai-key");
-        const wrapperDeepseek = document.getElementById("wrapper-deepseek-key");
-        const wrapperGemini = document.getElementById("wrapper-gemini-key");
-        const wrapperQwen = document.getElementById("wrapper-qwen-key");
-
-        // 默认移除 show 类，折叠并隐藏所有动态面板
-        if (wrapperApiBase) wrapperApiBase.classList.remove("show");
-        if (apiKeysSection) apiKeysSection.classList.remove("show");
-        if (wrapperOpenai) wrapperOpenai.classList.remove("show");
-        if (wrapperDeepseek) wrapperDeepseek.classList.remove("show");
-        if (wrapperGemini) wrapperGemini.classList.remove("show");
-        if (wrapperQwen) wrapperQwen.classList.remove("show");
-
-        // 动态配置大模型 API Base 的标签名与占位符
-        const labelEl = wrapperApiBase ? wrapperApiBase.querySelector("label") : null;
-        if (labelEl) {
-            if (type === "ollama") {
-                labelEl.textContent = "Ollama 本地服务地址";
-            } else if (type === "qwen") {
-                labelEl.textContent = "通义千问代理地址 (API_BASE)";
-            } else if (type === "deepseek") {
-                labelEl.textContent = "DeepSeek 代理地址 (API_BASE)";
-            } else if (type === "gemini") {
-                labelEl.textContent = "Gemini 代理地址 (API_BASE)";
-            } else {
-                labelEl.textContent = "接口代理 Base 地址 (API_BASE)";
-            }
-        }
-
-        if (cfgApiBase) {
-            if (type === "ollama") {
-                cfgApiBase.placeholder = "例如: http://localhost:11434 (默认本机端口)";
-            } else if (type === "qwen") {
-                cfgApiBase.placeholder = "例如: https://dashscope.aliyuncs.com/compatible-mode/v1";
-            } else if (type === "deepseek") {
-                cfgApiBase.placeholder = "例如: https://api.deepseek.com/v1";
-            } else if (type === "gemini") {
-                cfgApiBase.placeholder = "例如: https://generativelanguage.googleapis.com";
-            } else {
-                cfgApiBase.placeholder = "默认官方地址，如: https://api.openai.com/v1";
-            }
-        }
-
-        // 高级超参控制台折叠展开状态判断 (极客微调支持)
-        const isAdvancedShown = advancedHyperparams && advancedHyperparams.classList.contains("show");
-        // 是否已经自定义了 API Base (用于 Ollama/Qwen 局域网或 Docker 跨容器连接逃生门)
-        const isCustomBase = cfgApiBase && cfgApiBase.value.trim() && 
-                             !cfgApiBase.value.includes("localhost") && 
-                             !cfgApiBase.value.includes("127.0.0.1") &&
-                             cfgApiBase.value !== "http://localhost:11434" &&
-                             cfgApiBase.value !== "http://127.0.0.1:11434";
-
-        // 根据大模型类型按需渐进披露
-        switch (type) {
-            case "ollama":
-                // 默认隐藏密钥。但若用户自定义了非 localhost 代理，或点开了极客高级控制台，则优雅滑出服务地址框
-                if (isCustomBase || isAdvancedShown) {
-                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
-                }
-                break;
-            case "deepseek":
-                if (apiKeysSection) apiKeysSection.classList.add("show");
-                if (wrapperDeepseek) wrapperDeepseek.classList.add("show");
-                // 允许中转代理微调
-                if (isCustomBase || isAdvancedShown) {
-                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
-                }
-                break;
-            case "gemini":
-                if (apiKeysSection) apiKeysSection.classList.add("show");
-                if (wrapperGemini) wrapperGemini.classList.add("show");
-                // 允许中转代理微调
-                if (isCustomBase || isAdvancedShown) {
-                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
-                }
-                break;
-            case "qwen":
-                if (apiKeysSection) apiKeysSection.classList.add("show");
-                if (wrapperQwen) wrapperQwen.classList.add("show");
-                // 允许中转代理微调
-                if (isCustomBase || isAdvancedShown) {
-                    if (wrapperApiBase) wrapperApiBase.classList.add("show");
-                }
-                break;
-            case "openai":
-            default:
-                // OpenAI 兼容的第三方大模型必须输入 API Key 和 Base 接口地址
-                if (apiKeysSection) apiKeysSection.classList.add("show");
-                if (wrapperOpenai) wrapperOpenai.classList.add("show");
-                if (wrapperApiBase) wrapperApiBase.classList.add("show");
-                break;
-        }
-
-        // ==============================================================================
-        // 2026 UI/UX Premium Twin-Lock (JS Focus Immunity & Autofill Prevention)
-        // ==============================================================================
-        const updateInputLockState = (inputEl, wrapperEl, isParentShown = true) => {
-            if (!inputEl) return;
-            const isShown = wrapperEl && wrapperEl.classList.contains("show") && isParentShown;
-            if (isShown) {
-                inputEl.removeAttribute("disabled");
-                inputEl.tabIndex = 0;
-            } else {
-                inputEl.setAttribute("disabled", "true");
-                inputEl.tabIndex = -1;
-            }
-        };
-
-        const isKeysSectionShown = apiKeysSection && apiKeysSection.classList.contains("show");
-
-        updateInputLockState(cfgApiBase, wrapperApiBase, true);
-        updateInputLockState(cfgOpenaiKey, wrapperOpenai, isKeysSectionShown);
-        updateInputLockState(cfgDeepseekKey, wrapperDeepseek, isKeysSectionShown);
-        updateInputLockState(cfgGeminiKey, wrapperGemini, isKeysSectionShown);
-        updateInputLockState(cfgQwenKey, wrapperQwen, isKeysSectionShown);
+        // 2026 Remastered: 各提供商专属字段已通过 syncProviderFieldsDisplay 渐进滑出并隔离。
+        // 此处仅做老代码兼容性空占位，绝不进行任何强加 disabled 锁定，彻底保障输入修改自由！
     }
 
     function switchToTextInput() {
-        if (cfgLlmPath && cfgLlmPathSelect) {
-            cfgLlmPath.style.display = "block";
+        if (cfgOllamaModel && cfgLlmPathSelect) {
+            cfgOllamaModel.style.display = "block";
             cfgLlmPathSelect.style.display = "none";
         }
     }
@@ -920,11 +823,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function toggleTheme() {
+        // 手动点击切换时临时增加过渡动画类，绝不污染首屏初始化
+        document.documentElement.classList.add("theme-transition");
+        
         const currentTheme = document.documentElement.getAttribute("data-theme");
         const nextTheme = currentTheme === "dark" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", nextTheme);
         localStorage.setItem("trilium_agent_theme", nextTheme);
         updateThemeToggleButton(nextTheme);
+        
+        // 300ms 渐变结束后安全卸载，释放常态渲染负载、保证首屏不闪烁
+        setTimeout(() => {
+            document.documentElement.classList.remove("theme-transition");
+        }, 300);
     }
 
     function updateThemeToggleButton(theme) {
@@ -1490,14 +1401,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 3. 回显各大模型提供商的专属独立参数，各行其道互不污染
         if (cfgOllamaBase) {
-            cfgOllamaBase.value = (activeLlmType === "ollama") ? (config.openai_api_base || "http://localhost:11434") : "http://localhost:11434";
+            if (activeLlmType === "ollama") {
+                cfgOllamaBase.value = config.openai_api_base || "http://localhost:11434";
+                localStorage.setItem("trilium_agent_ollama_base", cfgOllamaBase.value);
+            } else {
+                cfgOllamaBase.value = localStorage.getItem("trilium_agent_ollama_base") || "http://localhost:11434";
+            }
         }
         if (cfgOllamaModel) {
             cfgOllamaModel.value = (activeLlmType === "ollama" ? config.llm_model_path : "") || "qwen2.5:7b";
         }
         
         if (cfgOpenaiBase) {
-            cfgOpenaiBase.value = (activeLlmType === "openai" ? config.openai_api_base : "") || "https://api.openai.com/v1";
+            if (activeLlmType === "openai") {
+                cfgOpenaiBase.value = config.openai_api_base || "https://api.openai.com/v1";
+                localStorage.setItem("trilium_agent_openai_base", cfgOpenaiBase.value);
+            } else {
+                cfgOpenaiBase.value = localStorage.getItem("trilium_agent_openai_base") || "https://api.openai.com/v1";
+            }
         }
         if (cfgOpenaiModel) {
             cfgOpenaiModel.value = config.openai_model_name || "gpt-3.5-turbo";
@@ -1515,7 +1436,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         if (cfgQwenBase) {
-            cfgQwenBase.value = (activeLlmType === "qwen" && config.openai_api_base) ? config.openai_api_base : "https://dashscope.aliyuncs.com/compatible-mode/v1";
+            if (activeLlmType === "qwen") {
+                cfgQwenBase.value = config.openai_api_base || "https://dashscope.aliyuncs.com/compatible-mode/v1";
+                localStorage.setItem("trilium_agent_qwen_base", cfgQwenBase.value);
+            } else {
+                cfgQwenBase.value = localStorage.getItem("trilium_agent_qwen_base") || "https://dashscope.aliyuncs.com/compatible-mode/v1";
+            }
         }
         if (cfgQwenModel) {
             cfgQwenModel.value = (activeLlmType === "qwen" ? config.llm_model_path : "") || "qwen-turbo";

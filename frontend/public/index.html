@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>Trilium Knowledge Agent - Gemini Web Style</title>
+    <!-- 阻塞式首屏主题初始化内联拦截脚本（零延迟，彻底根治 Light Mode 刷新闪烁深色 Bug） -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem("trilium_agent_theme") || "dark";
+            document.documentElement.setAttribute("data-theme", savedTheme);
+        })();
+    </script>
     <!-- 引入高质感现代 Google 字体 -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/styles.css">
@@ -176,250 +183,272 @@
                 </button>
             </div>
             
+            <!-- 2026 Premium Tab 栏切换器 -->
+            <div class="drawer-tabs">
+                <div class="drawer-tab active" data-tab="ai-engine">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <span>大脑引擎</span>
+                </div>
+                <div class="drawer-tab" data-tab="knowledge-sync">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    <span>知识库接入</span>
+                </div>
+                <div class="drawer-tab" data-tab="rag-tuning">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>检索调优</span>
+                </div>
+            </div>
+            
             <form id="settings-form" class="drawer-body">
-                <!-- 模型选择卡片网格 -->
-                <div class="form-item">
-                    <div class="form-label-row">
-                        <label>大模型驱动类型 (LLM_MODEL_TYPE)</label>
-                        <span id="llm-status-dot" class="live-status-dot" title="大模型网络探测中..."></span>
-                    </div>
-                    <div class="provider-grid">
-                        <div class="provider-card active" data-provider="ollama">
-                            <div class="provider-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                                </svg>
-                            </div>
-                            <div class="provider-meta">
-                                <div class="provider-title">Ollama</div>
-                                <div class="provider-desc">本地极速 / 隐私保护</div>
-                            </div>
-                            <div class="provider-badge">Local</div>
-                        </div>
-                        <div class="provider-card" data-provider="openai">
-                            <div class="provider-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                                </svg>
-                            </div>
-                            <div class="provider-meta">
-                                <div class="provider-title">OpenAI</div>
-                                <div class="provider-desc">行业标杆 / 兼容第三方</div>
-                            </div>
-                            <div class="provider-badge">Cloud</div>
-                        </div>
-                        <div class="provider-card" data-provider="deepseek">
-                            <div class="provider-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                                </svg>
-                            </div>
-                            <div class="provider-meta">
-                                <div class="provider-title">DeepSeek</div>
-                                <div class="provider-desc">极速推理 / 性价比首选</div>
-                            </div>
-                            <div class="provider-badge">Hot</div>
-                        </div>
-                        <div class="provider-card" data-provider="gemini">
-                            <div class="provider-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"></polygon>
-                                </svg>
-                            </div>
-                            <div class="provider-meta">
-                                <div class="provider-title">Gemini</div>
-                                <div class="provider-desc">谷歌多模态 / 闪电响应</div>
-                            </div>
-                            <div class="provider-badge">Google</div>
-                        </div>
-                        <div class="provider-card" data-provider="qwen">
-                            <div class="provider-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                </svg>
-                            </div>
-                            <div class="provider-meta">
-                                <div class="provider-title">通义千问</div>
-                                <div class="provider-desc">阿里 Qwen / 极致流畅</div>
-                            </div>
-                            <div class="provider-badge">Alibaba</div>
-                        </div>
-                    </div>
-                    <!-- 隐藏的传统下拉与输入，维持向后兼容与原有探测逻辑 -->
-                    <select id="cfg-llm-type" class="glass-select" style="display: none;">
-                        <option value="ollama">Ollama (本地私有化)</option>
-                        <option value="deepseek">DeepSeek (深度求索极速 API)</option>
-                        <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
-                        <option value="openai">OpenAI / 兼容第三方大模型</option>
-                        <option value="qwen">阿里通义千问 (Qwen API)</option>
-                    </select>
-                    <input type="hidden" id="cfg-llm-path" value="">
-                    <input type="hidden" id="cfg-api-base" value="">
-                </div>
-
-                <!-- Trilium Base URL 配置 -->
-                <div class="form-item">
-                    <div class="form-label-row">
-                        <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
-                        <span id="trilium-status-dot" class="live-status-dot" title="Trilium 连通性探测中..."></span>
-                    </div>
-                    <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
-                </div>
-
-                <!-- 各提供商专属参数字段群组 (自适应渐进折叠) -->
-                
-                <!-- Ollama 专属配置 -->
-                <div id="fields-ollama" class="provider-fields-group">
+                <!-- ================= TAB 1: 大大脑引擎 ================= -->
+                <div id="tab-ai-engine" class="tab-content active">
+                    <!-- 模型选择卡片网格 -->
                     <div class="form-item">
-                        <label>Ollama 本地服务地址</label>
-                        <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
+                        <div class="form-label-row">
+                            <label>大模型驱动类型 (LLM_MODEL_TYPE)</label>
+                            <span id="llm-status-dot" class="live-status-dot" title="大模型网络探测中..."></span>
+                        </div>
+                        <div class="provider-grid">
+                            <div class="provider-card active" data-provider="ollama">
+                                <div class="provider-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="16"></line>
+                                        <line x1="8" y1="12" x2="16" y2="12"></line>
+                                    </svg>
+                                </div>
+                                <div class="provider-meta">
+                                    <div class="provider-title">Ollama</div>
+                                    <div class="provider-desc">本地极速 / 隐私保护</div>
+                                </div>
+                                <div class="provider-badge">Local</div>
+                            </div>
+                            <div class="provider-card" data-provider="openai">
+                                <div class="provider-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    </svg>
+                                </div>
+                                <div class="provider-meta">
+                                    <div class="provider-title">OpenAI</div>
+                                    <div class="provider-desc">行业标杆 / 兼容第三方</div>
+                                </div>
+                                <div class="provider-badge">Cloud</div>
+                            </div>
+                            <div class="provider-card" data-provider="deepseek">
+                                <div class="provider-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                    </svg>
+                                </div>
+                                <div class="provider-meta">
+                                    <div class="provider-title">DeepSeek</div>
+                                    <div class="provider-desc">极速推理 / 性价比首选</div>
+                                </div>
+                                <div class="provider-badge">Hot</div>
+                            </div>
+                            <div class="provider-card" data-provider="gemini">
+                                <div class="provider-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"></polygon>
+                                    </svg>
+                                </div>
+                                <div class="provider-meta">
+                                    <div class="provider-title">Gemini</div>
+                                    <div class="provider-desc">谷歌多模态 / 闪电响应</div>
+                                </div>
+                                <div class="provider-badge">Google</div>
+                            </div>
+                            <div class="provider-card" data-provider="qwen">
+                                <div class="provider-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    </svg>
+                                </div>
+                                <div class="provider-meta">
+                                    <div class="provider-title">通义千问</div>
+                                    <div class="provider-desc">阿里 Qwen / 极致流畅</div>
+                                </div>
+                                <div class="provider-badge">Alibaba</div>
+                            </div>
+                        </div>
+                        <!-- 隐藏的传统下拉与输入，维持向后兼容与原有探测逻辑 -->
+                        <select id="cfg-llm-type" class="glass-select" style="display: none;">
+                            <option value="ollama">Ollama (本地私有化)</option>
+                            <option value="deepseek">DeepSeek (深度求索极速 API)</option>
+                            <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
+                            <option value="openai">OpenAI / 兼容第三方大模型</option>
+                            <option value="qwen">阿里通义千问 (Qwen API)</option>
+                        </select>
+                        <input type="hidden" id="cfg-llm-path" value="">
+                        <input type="hidden" id="cfg-api-base" value="">
                     </div>
-                    <div class="form-item">
-                        <label>模型标识 (LLM_MODEL_PATH)</label>
-                        <div id="model-path-container" style="position: relative; width: 100%;">
-                            <input type="text" id="cfg-ollama-model" class="glass-input-field" placeholder="例如: qwen2.5:7b, llama3 等">
-                            <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
-                                <!-- 动态填充 -->
-                            </select>
+                    <!-- 各提供商专属参数字段群组 (自适应渐进折叠) -->
+                    
+                    <!-- Ollama 专属配置 -->
+                    <div id="fields-ollama" class="provider-fields-group">
+                        <div class="form-item">
+                            <label>Ollama 本地服务地址</label>
+                            <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
+                        </div>
+                        <div class="form-item">
+                            <label>模型标识 (LLM_MODEL_PATH)</label>
+                            <div id="model-path-container" style="position: relative; width: 100%;">
+                                <input type="text" id="cfg-ollama-model" class="glass-input-field" placeholder="例如: qwen2.5:7b, llama3 等">
+                                <select id="cfg-llm-path-select" class="glass-select" style="display: none; width: 100%;">
+                                    <!-- 动态填充 -->
+                                </select>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- OpenAI 专属配置 -->
-                <div id="fields-openai" class="provider-fields-group">
-                    <div class="form-item">
-                        <label>OpenAI 代理 Base URL</label>
-                        <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址: https://api.openai.com/v1">
+                    <!-- OpenAI 专属配置 -->
+                    <div id="fields-openai" class="provider-fields-group">
+                        <div class="form-item">
+                            <label>OpenAI 代理 Base URL</label>
+                            <input type="text" id="cfg-openai-base" class="glass-input-field" placeholder="默认官方地址: https://api.openai.com/v1">
+                        </div>
+                        <div class="form-item">
+                            <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
+                            <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                        <div class="form-item">
+                            <label>OpenAI 模型名称 (OPENAI_MODEL_NAME)</label>
+                            <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o">
+                        </div>
                     </div>
-                    <div class="form-item">
-                        <label>OpenAI 密钥 (OPENAI_API_KEY)</label>
-                        <input type="password" id="cfg-openai-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                    </div>
-                    <div class="form-item">
-                        <label>OpenAI 模型名称 (OPENAI_MODEL_NAME)</label>
-                        <input type="text" id="cfg-openai-model" class="glass-input-field" placeholder="例如: gpt-3.5-turbo, gpt-4o">
-                    </div>
-                </div>
 
-                <!-- DeepSeek 专属配置 -->
-                <div id="fields-deepseek" class="provider-fields-group">
-                    <div class="form-item">
-                        <label>DeepSeek 代理 Base URL</label>
-                        <input type="text" id="cfg-deepseek-base" class="glass-input-field" placeholder="默认官方地址: https://api.deepseek.com/v1">
+                    <!-- DeepSeek 专属配置 -->
+                    <div id="fields-deepseek" class="provider-fields-group">
+                        <div class="form-item">
+                            <label>DeepSeek 代理 Base URL</label>
+                            <input type="text" id="cfg-deepseek-base" class="glass-input-field" placeholder="默认官方地址: https://api.deepseek.com/v1">
+                        </div>
+                        <div class="form-item">
+                            <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
+                            <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                        <div class="form-item">
+                            <label>DeepSeek 模型名称 (DEEPSEEK_MODEL_NAME)</label>
+                            <input type="text" id="cfg-deepseek-model" class="glass-input-field" placeholder="例如: deepseek-chat, deepseek-coder">
+                        </div>
                     </div>
-                    <div class="form-item">
-                        <label>DeepSeek 密钥 (DEEPSEEK_API_KEY)</label>
-                        <input type="password" id="cfg-deepseek-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                    </div>
-                    <div class="form-item">
-                        <label>DeepSeek 模型名称 (DEEPSEEK_MODEL_NAME)</label>
-                        <input type="text" id="cfg-deepseek-model" class="glass-input-field" placeholder="例如: deepseek-chat, deepseek-coder">
-                    </div>
-                </div>
 
-                <!-- Google Gemini 专属配置 -->
-                <div id="fields-gemini" class="provider-fields-group">
-                    <div class="form-item">
-                        <label>Gemini 密钥 (GEMINI_API_KEY)</label>
-                        <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                    <!-- Google Gemini 专属配置 -->
+                    <div id="fields-gemini" class="provider-fields-group">
+                        <div class="form-item">
+                            <label>Gemini 密钥 (GEMINI_API_KEY)</label>
+                            <input type="password" id="cfg-gemini-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                        <div class="form-item">
+                            <label>Gemini 模型名称 (GEMINI_MODEL_NAME)</label>
+                            <input type="text" id="cfg-gemini-model" class="glass-input-field" placeholder="例如: gemini-2.5-flash, gemini-1.5-pro">
+                        </div>
                     </div>
-                    <div class="form-item">
-                        <label>Gemini 模型名称 (GEMINI_MODEL_NAME)</label>
-                        <input type="text" id="cfg-gemini-model" class="glass-input-field" placeholder="例如: gemini-2.5-flash, gemini-1.5-pro">
-                    </div>
-                </div>
 
-                <!-- 阿里通义千问 专属配置 -->
-                <div id="fields-qwen" class="provider-fields-group">
-                    <div class="form-item">
-                        <label>通义千问 代理 Base URL</label>
-                        <input type="text" id="cfg-qwen-base" class="glass-input-field" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1">
-                    </div>
-                    <div class="form-item">
-                        <label>通义千问 密钥 (QWEN_API_KEY)</label>
-                        <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
-                    </div>
-                    <div class="form-item">
-                        <label>Qwen 模型名称 (QWEN_MODEL_NAME)</label>
-                        <input type="text" id="cfg-qwen-model" class="glass-input-field" placeholder="例如: qwen-turbo, qwen-plus">
+                    <!-- 阿里通义千问 专属配置 -->
+                    <div id="fields-qwen" class="provider-fields-group">
+                        <div class="form-item">
+                            <label>通义千问 代理 Base URL</label>
+                            <input type="text" id="cfg-qwen-base" class="glass-input-field" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1">
+                        </div>
+                        <div class="form-item">
+                            <label>通义千问 密钥 (QWEN_API_KEY)</label>
+                            <input type="password" id="cfg-qwen-key" class="glass-input-field" placeholder="配置后将自动对原有秘钥执行脱敏回显">
+                        </div>
+                        <div class="form-item">
+                            <label>Qwen 模型名称 (QWEN_MODEL_NAME)</label>
+                            <input type="text" id="cfg-qwen-model" class="glass-input-field" placeholder="例如: qwen-turbo, qwen-plus">
+                        </div>
                     </div>
                 </div>
 
-                <!-- RAG 参数配置 -->
-                <div class="form-section-title">算法参数 (RAG Pipeline Settings)</div>
-
-                <!-- 智能体回答模式 (2026 前沿降维自适应设计) -->
-                <div class="form-item">
-                    <label>智能体回答模式 (Agent Answering Style)</label>
-                    <div class="style-cards-container">
-                        <div class="style-card" data-mode="strict">
-                            <div class="card-icon">🔒</div>
-                            <div class="card-meta">
-                                <div class="card-title">严谨纪实 (Strict)</div>
-                                <div class="card-desc">代码报错排查、精确配置。过滤高，温度 0.1 阻绝幻觉</div>
-                            </div>
-                        </div>
-                        <div class="style-card active" data-mode="balanced">
-                            <div class="card-icon">⚖️</div>
-                            <div class="card-meta">
-                                <div class="card-title">标准平衡 (Balanced)</div>
-                                <div class="card-desc">日常笔记整理、通用知识。精准过滤与合并，语义适中</div>
-                            </div>
-                        </div>
-                        <div class="style-card" data-mode="creative">
-                            <div class="card-icon">🎨</div>
-                            <div class="card-meta">
-                                <div class="card-title">脑暴合成 (Creative)</div>
-                                <div class="card-desc">撰写博客大纲、发散关联。宽容度高，激发跨域联想</div>
-                            </div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="cfg-response-mode" value="balanced">
-                </div>
-
-                <!-- 隐藏的传统超参区 (点击可展开极客超参，降低普通用户认知负荷) -->
-                <div class="advanced-toggle-wrapper">
-                    <button type="button" id="btn-toggle-advanced" class="glass-toggle-btn">
-                        <span>显示高级控制台超参</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-icon" style="transition: transform 0.3s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </button>
-                </div>
-
-                <div id="advanced-hyperparams" class="advanced-hyperparams">
-                    <div class="form-item flex-row">
-                        <label for="cfg-use-reranker">启用 BGE 语义交叉重排器 (Reranker)</label>
-                        <div class="toggle-switch">
-                            <input type="checkbox" id="cfg-use-reranker">
-                            <label for="cfg-use-reranker"></label>
-                        </div>
-                    </div>
-
+                <!-- ================= TAB 2: 知识库集成接入 ================= -->
+                <div id="tab-knowledge-sync" class="tab-content">
+                    <!-- 知识库数据源接入 (Trilium Integrations) -->
+                    <div class="form-section-title">知识库数据源接入 (Trilium Integrations)</div>
                     <div class="form-item">
-                        <div class="slider-header">
-                            <label>BGE 重排分值相关阈值 (RERANKER_THRESHOLD)</label>
-                            <span id="val-reranker-threshold" class="slider-val">0.00</span>
+                        <div class="form-label-row">
+                            <label>Trilium 基准网页地址 (TRILIUM_BASE_URL)</label>
+                            <span id="trilium-status-dot" class="live-status-dot" title="Trilium 连通性探测中..."></span>
                         </div>
-                        <input type="range" id="cfg-reranker-threshold" min="0.0" max="1.0" step="0.05" class="glass-slider">
+                        <input type="text" id="cfg-trilium-url" class="glass-input-field" placeholder="例如: http://localhost:8080">
                     </div>
 
+                    <!-- 长期记忆配置区 -->
+                    <div class="form-section-title">长期记忆管理 (Agent Long-Term Memory)</div>
                     <div class="form-item">
-                        <div class="slider-header">
-                            <label>向量检索召回文档数 K (SEARCH_K)</label>
-                            <span id="val-search-k" class="slider-val">10</span>
-                        </div>
-                        <input type="range" id="cfg-search-k" min="1" max="20" step="1" class="glass-slider">
+                        <label>长期记忆 Markdown 内容 (修改即时修正大模型认知)</label>
+                        <textarea id="cfg-memory-content" class="glass-textarea" rows="12" placeholder="正在加载记忆数据..."></textarea>
                     </div>
                 </div>
 
-                <!-- 长期记忆配置区 -->
-                <div class="form-section-title">长期记忆管理 (Agent Long-Term Memory)</div>
-                <div class="form-item">
-                    <label>长期记忆 Markdown 内容 (修改即时修正大模型认知)</label>
-                    <textarea id="cfg-memory-content" class="glass-textarea" rows="12" placeholder="正在加载记忆数据..."></textarea>
+                <!-- ================= TAB 3: 高级检索算法参数 ================= -->
+                <div id="tab-rag-tuning" class="tab-content">
+                    <!-- 智能体回答模式 (2026 前沿降维自适应设计) -->
+                    <div class="form-item">
+                        <label>智能体回答模式 (Agent Answering Style)</label>
+                        <div class="style-cards-container">
+                            <div class="style-card" data-mode="strict">
+                                <div class="card-icon">🔒</div>
+                                <div class="card-meta">
+                                    <div class="card-title">严谨纪实 (Strict)</div>
+                                    <div class="card-desc">代码报错排查、精确配置。过滤高，温度 0.1 阻绝幻觉</div>
+                                </div>
+                            </div>
+                            <div class="style-card active" data-mode="balanced">
+                                <div class="card-icon">⚖️</div>
+                                <div class="card-meta">
+                                    <div class="card-title">标准平衡 (Balanced)</div>
+                                    <div class="card-desc">日常笔记整理、通用知识。精准过滤与合并，语义适中</div>
+                                </div>
+                            </div>
+                            <div class="style-card" data-mode="creative">
+                                <div class="card-icon">🎨</div>
+                                <div class="card-meta">
+                                    <div class="card-title">脑暴合成 (Creative)</div>
+                                    <div class="card-desc">撰写博客大纲、发散关联。宽容度高，激发跨域联想</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="cfg-response-mode" value="balanced">
+                    </div>
+
+                    <!-- 隐藏的传统超参区 (点击可展开极客超参，降低普通用户认知负荷) -->
+                    <div class="advanced-toggle-wrapper">
+                        <button type="button" id="btn-toggle-advanced" class="glass-toggle-btn">
+                            <span>显示高级控制台超参</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="toggle-icon" style="transition: transform 0.3s ease;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                    </div>
+
+                    <div id="advanced-hyperparams" class="advanced-hyperparams">
+                        <div class="form-item flex-row">
+                            <label for="cfg-use-reranker">启用 BGE 语义交叉重排器 (Reranker)</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="cfg-use-reranker">
+                                <label for="cfg-use-reranker"></label>
+                            </div>
+                        </div>
+
+                        <div class="form-item">
+                            <div class="slider-header">
+                                <label>BGE 重排分值相关阈值 (RERANKER_THRESHOLD)</label>
+                                <span id="val-reranker-threshold" class="slider-val">0.00</span>
+                            </div>
+                            <input type="range" id="cfg-reranker-threshold" min="0.0" max="1.0" step="0.05" class="glass-slider">
+                        </div>
+
+                        <div class="form-item">
+                            <div class="slider-header">
+                                <label>向量检索召回文档数 K (SEARCH_K)</label>
+                                <span id="val-search-k" class="slider-val">10</span>
+                            </div>
+                            <input type="range" id="cfg-search-k" min="1" max="20" step="1" class="glass-slider">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 抽屉保存按钮 -->

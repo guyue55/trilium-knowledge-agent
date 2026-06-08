@@ -176,6 +176,7 @@ def update_env_file(payload: dict[str, Any]):
             "deepseek_api_key": "DEEPSEEK_API_KEY",
             "gemini_model_name": "GEMINI_MODEL_NAME",
             "gemini_api_key": "GEMINI_API_KEY",
+            "qwen_api_key": "QWEN_API_KEY",
             "use_reranker": "USE_RERANKER",
             "reranker_threshold": "RERANKER_THRESHOLD",
             "search_k": "SEARCH_K",
@@ -286,7 +287,8 @@ async def get_config_api(
         # 脱敏回显
         "openai_api_key": "******" if config.openai_api_key.strip() else "",
         "deepseek_api_key": "******" if config.deepseek_api_key.strip() else "",
-        "gemini_api_key": "******" if config.gemini_api_key.strip() else ""
+        "gemini_api_key": "******" if config.gemini_api_key.strip() else "",
+        "qwen_api_key": "******" if config.qwen_api_key.strip() else ""
     }
 
 
@@ -336,6 +338,11 @@ async def update_config_api(
         key = str(payload["gemini_api_key"]).strip()
         if key and not key.startswith("******"):
             config.gemini_api_key = key
+
+    if "qwen_api_key" in payload:
+        key = str(payload["qwen_api_key"]).strip()
+        if key and not key.startswith("******"):
+            config.qwen_api_key = key
 
     if "trilium_base_url" in payload:
         config.trilium_base_url = str(payload["trilium_base_url"]).strip()
