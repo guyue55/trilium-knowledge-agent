@@ -88,6 +88,7 @@ class LiteLLMAdapter(LLMAdapter):
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temperature,
+                "timeout": getattr(self.config, "llm_generation_timeout", 120),
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key
@@ -116,6 +117,7 @@ class LiteLLMAdapter(LLMAdapter):
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": True,
                 "temperature": temperature,
+                "timeout": getattr(self.config, "llm_generation_timeout", 120),
             }
             if self.api_key:
                 kwargs["api_key"] = self.api_key

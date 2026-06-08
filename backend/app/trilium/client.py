@@ -11,10 +11,22 @@ from urllib3.util.retry import Retry
 from app.core.config import get_config
 
 
+class TimeoutSession(requests.Session):
+    """高雅的、带默认超时防御的 Session，杜绝底层 requests 连接挂起."""
+    def __init__(self, timeout: int = 30):
+        super().__init__()
+        self.default_timeout = timeout
+
+    def request(self, method, url, *args, **kwargs):
+        if "timeout" not in kwargs or kwargs["timeout"] is None:
+            kwargs["timeout"] = self.default_timeout
+        return super().request(method, url, *args, **kwargs)
+
+
 def _get_shared_session() -> requests.Session:
     """创建带有重试策略的共享Session."""
     config = get_config()
-    session = requests.Session()
+    session = TimeoutSession(timeout=config.trilium_api_timeout)
     retry_strategy = Retry(
         total=config.max_retries,
         backoff_factor=config.retry_backoff_factor,
