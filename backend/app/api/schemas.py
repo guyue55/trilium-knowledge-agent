@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""用于API请求/响应验证的Pydantic模型."""
+"""用于 API 请求/响应验证的 Pydantic 模型以及高层 DTO 数据适配器."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class QuestionRequest(BaseModel):
@@ -11,6 +11,9 @@ class QuestionRequest(BaseModel):
 
     包含输入验证，确保问题格式正确且长度合理。
     """
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"question": "Trilium Notes 如何创建代码笔记？"}}
+    )
 
     question: str = Field(
         ...,
@@ -24,20 +27,10 @@ class QuestionRequest(BaseModel):
         description="会话ID，用于区分不同用户的对话历史",
     )
 
-    @validator("question")
+    @field_validator("question")
+    @classmethod
     def validate_question(cls, v: str) -> str:
-        """验证问题内容.
-
-        Args:
-            v: 问题字符串.
-
-        Returns:
-            str: 清理后的问题字符串.
-
-        Raises:
-            ValueError: 当问题内容不合法时.
-        """
-        # 去除首尾空白
+        """验证问题内容并清洗空白，拦截潜在 XSS 入侵."""
         v = v.strip()
 
         # 检查是否为空
@@ -52,27 +45,14 @@ class QuestionRequest(BaseModel):
 
         return v
 
-    class Config:
-        """Pydantic配置."""
-
-        schema_extra = {"example": {"question": "Trilium Notes 如何创建代码笔记？"}}
-
 
 class SourceDocument(BaseModel):
     """源文档模型.
 
     表示问答系统返回的文档来源信息。
     """
-
-    source: str = Field(..., description="文档来源标识")
-    content: str | None = Field(None, max_length=500, description="文档内容预览（最多500字符）")
-    title: str | None = Field(None, max_length=200, description="文档标题（最多200字符）")
-    url: str | None = Field(None, description="文档URL链接")
-
-    class Config:
-        """Pydantic配置."""
-
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "source": "trilium:abc123",
                 "title": "Trilium使用指南",
@@ -80,6 +60,12 @@ class SourceDocument(BaseModel):
                 "url": "http://localhost:8080/#?noteId=abc123",
             }
         }
+    )
+
+    source: str = Field(..., description="文档来源标识")
+    content: str | None = Field(None, max_length=500, description="文档内容预览（最多500字符）")
+    title: str | None = Field(None, max_length=200, description="文档标题（最多200字符）")
+    url: str | None = Field(None, description="文档URL链接")
 
 
 class ErrorDetail(BaseModel):
@@ -98,15 +84,8 @@ class AnswerResponse(BaseModel):
 
     包含答案、来源文档以及可能的错误信息。
     """
-
-    answer: str = Field(..., description="生成的答案")
-    sources: list[SourceDocument] | None = Field(default=None, description="源文档列表")
-    error: ErrorDetail | None = Field(default=None, description="错误信息（如果有）")
-
-    class Config:
-        """Pydantic配置."""
-
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "answer": "在Trilium中创建代码笔记非常简单...",
                 "sources": [
@@ -120,3 +99,45 @@ class AnswerResponse(BaseModel):
                 "error": None,
             }
         }
+    )
+
+    answer: str = Field(..., description="生成的答案")
+    sources: list[SourceDocument] | None = Field(default=None, description="源文档列表")
+    error: ErrorDetail | None = Field(default=None, description="错误信息（如果有）")
+
+
+class DataTransformer:
+    """高阶接口适配与协议转换器.
+
+    实现业务模型/数据存储层到前端 API DTO 的原子解耦转换，从而完美支持外部库、
+    数据库以及切片数据字段的任意后续演进变更。
+    """
+
+    @staticmethod
+    def to_source_document(raw_source: dict, trilium_base_url: str = "") -> SourceDocument:
+        """自适应转换器：将任意字典源转化为具有严格 Pydantic V2 规约的高可靠 SourceDocument DTO.
+
+        支持 note_id、source 自动互转并自适应生成完美的直连物理链接，同时对大文本自动截断
+        以节省 API 同步传输带宽负担。
+        """
+        note_id = raw_source.get("note_id") or ""
+        
+        # 1. source 属性防崩溃自适应：如果缺少必填的 source，通过 trilium:{note_id} 动态推导或安全降级
+        source_id = raw_source.get("source") or (f"trilium:{note_id}" if note_id else "unknown")
+        
+        # 2. 链接完美拼装适配：若无外部现成 URL 链接，直接依据 base_url 和 note_id 自适应构建
+        url = raw_source.get("url")
+        if not url and note_id and trilium_base_url:
+            clean_base = trilium_base_url.rstrip("/")
+            url = f"{clean_base}/#root/{note_id}"
+
+        # 3. 500字安全物理截断保护，防止大文档切片撑爆前端 DOM 树
+        raw_content = raw_source.get("content") or ""
+        content_preview = raw_content[:500] if raw_content else None
+
+        return SourceDocument(
+            source=source_id,
+            content=content_preview,
+            title=raw_source.get("title") or "未知文档",
+            url=url
+        )

@@ -153,5 +153,59 @@ class TestAnswerResponse:
         assert response.error is None
 
 
+class TestDataTransformer:
+    """测试 DataTransformer 接口适配层与转换逻辑."""
+
+    def test_transformer_with_complete_fields(self):
+        """测试在源字段完整时，自动高保真地转换."""
+        from app.api.schemas import DataTransformer
+        
+        raw_src = {
+            "source": "trilium:abc123",
+            "note_id": "abc123",
+            "title": "测试知识库笔记",
+            "content": "这是一大段很长的正文切片内容，测试截断。",
+            "url": "http://my-trilium.com/#root/abc123"
+        }
+        
+        doc = DataTransformer.to_source_document(raw_src, trilium_base_url="http://localhost:8080")
+        assert doc.source == "trilium:abc123"
+        assert doc.title == "测试知识库笔记"
+        assert doc.content == "这是一大段很长的正文切片内容，测试截断。"
+        assert doc.url == "http://my-trilium.com/#root/abc123"
+
+    def test_transformer_protects_missing_source_and_url_generation(self):
+        """测试在缺少 source 和 url 时，自适应降级并拼装生成完美的直连链接."""
+        from app.api.schemas import DataTransformer
+        
+        # 缺少 source 且缺少 url，但具有 note_id
+        raw_src = {
+            "note_id": "xyz789",
+            "title": "未知名",
+            "content": "一些正文..."
+        }
+        
+        doc = DataTransformer.to_source_document(raw_src, trilium_base_url="http://localhost:8080/")
+        # 1. 自动推导 source 为 trilium:xyz789
+        assert doc.source == "trilium:xyz789"
+        # 2. 自动拼装正确的 URL 链接
+        assert doc.url == "http://localhost:8080/#root/xyz789"
+        assert doc.title == "未知名"
+
+    def test_transformer_safe_truncation(self):
+        """测试超长内容在 DTO 转换阶段被安全物理截断，减少传输开销."""
+        from app.api.schemas import DataTransformer
+        
+        long_text = "我" * 600
+        raw_src = {
+            "note_id": "truncated_note",
+            "content": long_text
+        }
+        
+        doc = DataTransformer.to_source_document(raw_src, trilium_base_url="http://localhost:8080")
+        assert len(doc.content) == 500
+        assert doc.content == "我" * 500
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

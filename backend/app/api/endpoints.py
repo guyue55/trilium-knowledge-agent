@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_qa_service, get_config, get_vector_store
-from app.api.schemas import AnswerResponse, QuestionRequest
+from app.api.schemas import AnswerResponse, QuestionRequest, DataTransformer
 from app.core.config import Config
 from app.core.container import container
 from app.core.security import verify_api_key
@@ -31,7 +31,18 @@ async def ask_question(
     session_id = request.session_id or "default"
     result = await qa_service.ask(request.question, session_id=session_id)
 
-    return AnswerResponse(answer=result["answer"], sources=result.get("sources", []))
+    # 运用 DataTransformer 提供健壮的接口格式转换，阻断运行时 Pydantic 校验报错并解耦底层数据结构
+    config = get_config()
+    raw_sources = result.get("sources", [])
+    transformed_sources = [
+        DataTransformer.to_source_document(src, trilium_base_url=config.trilium_base_url)
+        for src in raw_sources
+    ]
+
+    return AnswerResponse(
+        answer=result["answer"],
+        sources=transformed_sources
+    )
 
 @router.post("/ask_stream")
 async def ask_question_stream(
@@ -43,8 +54,17 @@ async def ask_question_stream(
     session_id = request.session_id or "default"
     
     async def event_generator():
+        config = get_config()
         try:
             async for event in qa_service.ask_stream(request.question, session_id=session_id):
+                # 运用 DataTransformer 统一对流式 sources 进行解耦转换，消除未来的字段缺失与类型不一致隐患
+                if isinstance(event, dict) and event.get("type") == "sources" and "data" in event:
+                    raw_sources = event["data"] or []
+                    transformed_sources = [
+                        DataTransformer.to_source_document(src, trilium_base_url=config.trilium_base_url).model_dump()
+                        for src in raw_sources
+                    ]
+                    event = {"type": "sources", "data": transformed_sources}
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'data': {'message': str(e)}})}\n\n"

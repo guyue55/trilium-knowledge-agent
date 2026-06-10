@@ -4,6 +4,7 @@
 import time
 import asyncio
 from typing import Any, AsyncGenerator
+from urllib.parse import urlparse
 import requests
 from loguru import logger
 from litellm import acompletion, completion
@@ -193,15 +194,44 @@ class LLMFactory:
         # 2. Ollama 连通性极速探测（防止本地未开客户端导致 LiteLLM 在 completion 时长达数十秒的死等和连接超时）
         if model_type == "ollama":
             api_base = config.openai_api_base or "http://localhost:11434"
+            
+            # 智能提取根路径以增强对于带有 /v1 等后缀路径的兼容性
+            probe_url = api_base
             try:
-                # 极速探测 0.8 秒
-                response = requests.get(api_base, timeout=0.8)
-                if response.status_code != 200:
-                    logger.warning(f"Ollama 服务端口返回异常代码 {response.status_code}，触发退化。")
-                    return LLMFactory._get_mock_fallback()
-                logger.info("Ollama 本地服务在线，成功连接到 Ollama。")
-            except Exception as conn_err:
-                logger.warning(f"无法连通 Ollama 本地服务 ({api_base}): {conn_err}。系统自动为您降级至模拟大模型。")
+                parsed = urlparse(api_base)
+                if parsed.scheme and parsed.netloc:
+                    probe_url = f"{parsed.scheme}://{parsed.netloc}"
+            except Exception as parse_err:
+                logger.debug(f"解析 Ollama API Base 失败: {parse_err}")
+
+            # 待尝试探测端点（优先根路径，备份原始路径）
+            urls_to_try = []
+            for u in [probe_url, api_base]:
+                if u and u not in urls_to_try:
+                    urls_to_try.append(u)
+
+            online = False
+            last_err = None
+            last_status = None
+
+            for url in urls_to_try:
+                try:
+                    # 极速探测 0.8 秒
+                    response = requests.get(url, timeout=0.8)
+                    last_status = response.status_code
+                    # 允许 200 或常见的服务端存在状态码（表示非网络异常，服务器在线响应）
+                    # 即使是 /v1 返回了 404/405，同样证明存在活跃的 HTTP 响应，属于在线状态
+                    if response.status_code == 200 or response.status_code in [401, 403, 404, 405]:
+                        online = True
+                        logger.info(f"Ollama 探测连通成功 (探测地址: {url}, 响应状态码: {response.status_code})")
+                        break
+                except Exception as conn_err:
+                    last_err = conn_err
+                    logger.debug(f"探测 Ollama 端点失败 ({url}): {conn_err}")
+
+            if not online:
+                err_msg = f"HTTP 状态码: {last_status}" if last_status is not None else f"网络错误: {last_err}"
+                logger.warning(f"无法连通 Ollama 服务 (配置: {api_base}, 详细原因: {err_msg})。系统自动为您降级至模拟大模型。")
                 return LLMFactory._get_mock_fallback()
 
         try:
