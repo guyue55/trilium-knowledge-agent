@@ -229,9 +229,9 @@
                                 </div>
                                 <div class="provider-meta">
                                     <div class="provider-title">Ollama</div>
-                                    <div class="provider-desc">本地极速 / 隐私保护</div>
+                                    <div class="provider-desc">私有化部署 / 隐私保护</div>
                                 </div>
-                                <div class="provider-badge">Local</div>
+                                <div class="provider-badge">Ollama</div>
                             </div>
                             <div class="provider-card" data-provider="openai">
                                 <div class="provider-icon">
@@ -286,7 +286,7 @@
                         </div>
                         <!-- 隐藏的传统下拉与输入，维持向后兼容与原有探测逻辑 -->
                         <select id="cfg-llm-type" class="glass-select" style="display: none;">
-                            <option value="ollama">Ollama (本地私有化)</option>
+                            <option value="ollama">Ollama (私有化部署)</option>
                             <option value="deepseek">DeepSeek (深度求索极速 API)</option>
                             <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
                             <option value="openai">OpenAI / 兼容第三方大模型</option>
@@ -300,7 +300,7 @@
                     <!-- Ollama 专属配置 -->
                     <div id="fields-ollama" class="provider-fields-group">
                         <div class="form-item">
-                            <label>Ollama 本地服务地址 <span class="required-star">*</span></label>
+                            <label>Ollama 服务地址 (API Base) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
                             <div class="field-error-msg"></div>
                         </div>

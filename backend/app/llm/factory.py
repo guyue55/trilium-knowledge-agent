@@ -32,7 +32,13 @@ class LiteLLMAdapter(LLMAdapter):
                 self.model_name = model_path
             else:
                 self.model_name = f"ollama/{model_path}"
-            self.api_base = config.openai_api_base or "http://localhost:11434"
+            api_base = config.openai_api_base or "http://localhost:11434"
+            # 自动清洗结尾的 /v1 后缀，以防 LiteLLM 在 completion 调用时报错
+            if api_base.endswith("/v1"):
+                api_base = api_base[:-3].rstrip("/")
+            elif api_base.endswith("/v1/"):
+                api_base = api_base[:-4].rstrip("/")
+            self.api_base = api_base
             logger.info(f"Ollama 配置路由 -> 模型: {self.model_name}, Base: {self.api_base}")
         elif model_type == "qwen":
             self.model_name = config.llm_model_path if config.llm_model_path else "qwen-turbo"
@@ -147,17 +153,17 @@ class MockLLMAdapter(LLMAdapter):
         time.sleep(1.0)
         return (
             "<answer>您好！这是本地内置的【模拟生成引擎 (MockLLM)】为您返回的答复。\n\n"
-            "因为您当前未启动本地大模型服务（如 Ollama），或者没有在 .env 文件中配置有效的第三方云端 API Key（如 OpenAI、阿里云通义千问等），为了保证项目一键部署和开发体验能平滑运行而无需忍受崩溃打断，系统已自适应为您启用本模拟服务。\n\n"
-            "请根据您的实际需要，在 `.env` 配置文件中写入您的 API Key 或启动您的本地 Ollama 服务来获取真实的智能解答！</answer>"
+            "因为您当前未启动外置大模型服务（如 Ollama），或者没有在 .env 文件中配置有效的第三方云端 API Key（如 OpenAI、阿里云通义千问等），为了保证项目一键部署和开发体验能平滑运行而无需忍受崩溃打断，系统已自适应为您启用本模拟服务。\n\n"
+            "请根据您的实际需要，在 `.env` 配置文件中写入您的 API Key 或配置可访问的 Ollama 服务来获取真实的智能解答！</answer>"
         )
         
     async def agenerate_stream(self, prompt: str) -> AsyncGenerator[str, None]:
         msg = (
-            "<answer>您好！由于您当前未在本地启动 Ollama 服务，或未在 `.env` 中提供有效的 LLM 平台 API Key，"
+            "<answer>您好！由于您当前未启动可用的 Ollama 服务，或未在 `.env` 中提供有效的 LLM 平台 API Key，"
             "本系统为了给您带来流畅的界面交互演示，已经无缝自适应降级到了【本地内置模拟流式大模型】。\n\n"
             "**配置指南：**\n"
-            "1. 本地大模型：安装并启动 [Ollama](https://ollama.com/) 客户端（运行例如 `ollama run qwen2:7b` ），无需任何 API Key，秒变全本地隐私安全知识库。\n"
-            "2. 在线大模型：在后端 `.env` 中将 `LLM_MODEL_TYPE` 设为 `openai`，并填入您的 `OPENAI_API_KEY` 与对应的 `OPENAI_API_BASE`，即刻体验极致智能。\n\n"
+            "1. Ollama 大模型：安装并启动 [Ollama](https://ollama.com/) 服务（运行例如 `ollama run qwen2:7b` ），无需任何 API Key，秒变高隐私安全的专属知识库。\n"
+            "2. 云端大模型：在后端 `.env` 或控制台设置中将 `LLM_MODEL_TYPE` 设为 `openai`，并填入您的 `OPENAI_API_KEY` 与对应的 `OPENAI_API_BASE`，即刻体验极致智能。\n\n"
             "这证实了我们的智能问答 RAG 管道已全线贯通！您可以照常体验清空上下文、后台同步等一系列炫酷操作！</answer>"
         )
         # 流式切片发送，带来细腻动感的打字机效果
