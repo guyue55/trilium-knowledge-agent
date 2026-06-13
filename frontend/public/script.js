@@ -743,7 +743,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 cfgOllamaModel.style.display = "none";
             }
             cfgLlmPathSelect.style.display = "block";
-            cfgLlmPathSelect.innerHTML = `<option value="">⌛ 正在自动检测本地模型...</option>`;
+            cfgLlmPathSelect.innerHTML = `<option value="">⌛ 正在自动检测已下载模型...</option>`;
             
             try {
                 const token = getAuthToken();
@@ -774,7 +774,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             cfgOllamaModel.value = cfgLlmPathSelect.value;
                         }
                     } else {
-                        showToast("本地未检测到可用的已下载 Ollama 模型，已切换为手动输入", "warning");
+                        showToast("未检测到可用的已下载 Ollama 模型，已切换为手动输入", "warning");
                         switchToTextInput();
                     }
                 } else {
@@ -1881,6 +1881,25 @@ document.addEventListener("DOMContentLoaded", () => {
     async function saveSettings() {
         const token = getAuthToken();
         const activeProvider = cfgLlmType ? cfgLlmType.value : "ollama";
+        
+        // 当大模型为 Ollama 时，显式拦截检测含有 /v1 后缀的非规范地址并给与精准友好报错
+        if (activeProvider === "ollama" && cfgOllamaBase) {
+            const ollamaBase = cfgOllamaBase.value.trim();
+            if (ollamaBase.endsWith("/v1") || ollamaBase.endsWith("/v1/")) {
+                showToast("Ollama 服务地址填写格式错误：请勿包含 '/v1' 或 '/v1/' 路径后缀（正确格式如: http://192.168.1.189:11434）。请修改后重试。", "error");
+                cfgOllamaBase.classList.add("has-error");
+                cfgOllamaBase.focus();
+                
+                // 仅监听一次输入事件，开始修改时自动移除红色高亮
+                cfgOllamaBase.addEventListener("input", function removeErr() {
+                    cfgOllamaBase.classList.remove("has-error");
+                    cfgOllamaBase.removeEventListener("input", removeErr);
+                });
+                return;
+            } else {
+                cfgOllamaBase.classList.remove("has-error");
+            }
+        }
         
         // 1. 提取核心基础及算法参数，加持 Null Guards/可选链机制防御保存锁死
         const payload = {

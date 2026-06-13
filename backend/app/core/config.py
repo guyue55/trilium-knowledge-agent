@@ -225,6 +225,12 @@ class Config(BaseSettings):
         if model_type_lower == "ollama" and not self.llm_model_path.strip():
             warnings.append("LLM_MODEL_TYPE 设为了 ollama，但未指定任何本地模型路径（如 qwen2:7b）。大模型问答将自动切换为本地 Mock 降级体验")
 
+        if model_type_lower == "ollama":
+            api_base = self.openai_api_base or "http://localhost:11434"
+            # 只有当 api_base 被显式填入且不是默认的 OpenAI URL，同时以 /v1 结尾时，才触发格式拦截报错
+            if api_base != "https://api.openai.com/v1" and (api_base.endswith("/v1") or api_base.endswith("/v1/")):
+                errors.append(f"Ollama 服务地址 (API Base) 填写格式不正确：'{api_base}'。请勿包含 '/v1' 或 '/v1/' 路径后缀（正确格式示例如: 'http://localhost:11434' 或 'http://192.168.1.189:11434'）。")
+
         if model_type_lower == "deepseek" and not self.deepseek_api_key.strip():
             warnings.append("LLM_MODEL_TYPE 设为了 deepseek，但未提供 DEEPSEEK_API_KEY，大模型问答将自动切换为本地 Mock 降级体验")
 

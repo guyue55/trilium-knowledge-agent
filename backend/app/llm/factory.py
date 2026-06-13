@@ -32,13 +32,7 @@ class LiteLLMAdapter(LLMAdapter):
                 self.model_name = model_path
             else:
                 self.model_name = f"ollama/{model_path}"
-            api_base = config.openai_api_base or "http://localhost:11434"
-            # 自动清洗结尾的 /v1 后缀，以防 LiteLLM 在 completion 调用时报错
-            if api_base.endswith("/v1"):
-                api_base = api_base[:-3].rstrip("/")
-            elif api_base.endswith("/v1/"):
-                api_base = api_base[:-4].rstrip("/")
-            self.api_base = api_base
+            self.api_base = config.openai_api_base or "http://localhost:11434"
             logger.info(f"Ollama 配置路由 -> 模型: {self.model_name}, Base: {self.api_base}")
         elif model_type == "qwen":
             self.model_name = config.llm_model_path if config.llm_model_path else "qwen-turbo"

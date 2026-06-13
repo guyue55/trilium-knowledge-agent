@@ -286,11 +286,11 @@
                         </div>
                         <!-- 隐藏的传统下拉与输入，维持向后兼容与原有探测逻辑 -->
                         <select id="cfg-llm-type" class="glass-select" style="display: none;">
-                            <option value="ollama">Ollama (私有化部署)</option>
-                            <option value="deepseek">DeepSeek (深度求索极速 API)</option>
-                            <option value="gemini">Google Gemini (官方低延迟闪烁)</option>
-                            <option value="openai">OpenAI / 兼容第三方大模型</option>
-                            <option value="qwen">阿里通义千问 (Qwen API)</option>
+                            <option value="ollama">Ollama</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="qwen">通义千问</option>
                         </select>
                         <input type="hidden" id="cfg-llm-path" value="">
                         <input type="hidden" id="cfg-api-base" value="">
@@ -302,6 +302,9 @@
                         <div class="form-item">
                             <label>Ollama 服务地址 (API Base) <span class="required-star">*</span></label>
                             <input type="text" id="cfg-ollama-base" class="glass-input-field" placeholder="例如: http://localhost:11434">
+                            <div class="field-info-text" style="font-size: 11px; opacity: 0.7; margin-top: 4px; color: var(--text-color);">
+                                * 提示：请勿包含 /v1 后缀，请使用不带子路径的根服务地址（如：http://localhost:11434）
+                            </div>
                             <div class="field-error-msg"></div>
                         </div>
                         <div class="form-item">

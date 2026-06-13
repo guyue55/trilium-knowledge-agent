@@ -109,7 +109,6 @@ class TestLLMFactoryAndAdapter:
         # 验证 requests.get 被正确调用
         mock_get.assert_called_with("http://localhost:11434", timeout=0.8)
 
-    @patch("requests.get")
     @patch.dict(
         os.environ,
         {
@@ -120,21 +119,15 @@ class TestLLMFactoryAndAdapter:
             "OPENAI_API_BASE": "http://192.168.1.189:11434/v1",
         },
     )
-    def test_ollama_detection_with_v1_and_404_ok(self, mock_get):
-        """测试带 /v1 后缀的外部 Ollama 端点，即使直接请求 /v1 返回 404，也能智能提取根路径并成功通过探测"""
-        mock_response = mock_get.return_value
-        mock_response.status_code = 404
+    def test_ollama_config_with_v1_fails_validation(self):
+        """测试当配置中 Ollama 带有 /v1 路径后缀时，验证器能够准确识别并抛出 ConfigError 阻断"""
+        from app.core.config import ConfigError
+        import pytest
         
-        config = Config()
-        llm = LLMFactory.create_llm(config)
-        
-        assert isinstance(llm, LiteLLMAdapter)
-        assert llm.model_name == "ollama/qwen2:7b"
-        assert llm.api_base == "http://192.168.1.189:11434/v1"
-        
-        # 验证第一次尝试的是智能提取的根路径 "http://192.168.1.189:11434"
-        called_urls = [call.args[0] for call in mock_get.call_args_list]
-        assert "http://192.168.1.189:11434" in called_urls
+        with pytest.raises(ConfigError) as exc_info:
+            Config().validate_complex_rules()
+            
+        assert "请勿包含 '/v1' 或 '/v1/' 路径后缀" in str(exc_info.value)
 
     @patch("requests.get")
     @patch.dict(
